@@ -1,0 +1,90 @@
+# ==========================================
+# Secure Software Update System - .gitignore
+# ==========================================
+
+# 1. Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+conda-meta/
+
+# 2. Python Bytecode & Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+.eggs/
+
+# 3. Testing & Coverage Cache
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.cache/
+
+# 4. Cryptographic Private Keys & TLS Certificates
+# (Private keys and environment certs must NEVER be committed)
+*.pem
+*.key
+*.crt
+*.csr
+*.pfx
+*.p12
+keys/*
+!keys/.gitkeep
+certs/*
+!certs/.gitkeep
+client/trusted_keys/*
+!client/trusted_keys/.gitkeep
+client/trusted_certs/*
+!client/trusted_certs/.gitkeep
+
+# 5. Database & Persistent Runtime State
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+server/database/*.db
+server/database/*.db-journal
+
+# 6. Client Runtime Storage & Staging
+client/storage/*
+!client/storage/.gitkeep
+client/storage/state.json
+client/storage/downloads/
+client/storage/staged/
+client/storage/backup/
+
+# 7. Generated Releases Metadata
+storage/releases/*.json
+!storage/releases/.gitkeep
+
+# 8. Temporary & Partial Files
+*.tmp
+*.temp
+*.part
+*.swp
+*~
+
+# 9. Logs & Runtime Telemetry
+*.log
+logs/
+*.pid
+
+# 10. OS & IDE Specific Files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace

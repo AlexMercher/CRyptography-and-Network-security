@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Secure Software Update System{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <header>
+    <div class="logo-container">
+      <span class="logo-badge"><i class="fa-solid fa-shield-halved"></i> CNS</span>
+      <span class="logo-title">Secure Software Update System</span>
+    </div>
+    <nav>
+      <a href="/admin" class="nav-link {% if request.path == '/admin' or request.path == '/' %}active{% endif %}">
+        <i class="fa-solid fa-sliders"></i> Admin Dashboard
+      </a>
+      <a href="/client" class="nav-link {% if request.path == '/client' %}active{% endif %}">
+        <i class="fa-solid fa-laptop-code"></i> Client Dashboard
+      </a>
+      <div class="status-indicator">
+        <div class="status-dot"></div>
+        <span>HTTPS / Ed25519 Active</span>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer>
+    <p>Computer Networks &amp; Security &mdash; Cryptographically Verified Update Architecture (Ed25519 &bull; SHA-256 &bull; TLS 1.3)</p>
+  </footer>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>
+

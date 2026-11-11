@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard &bull; Secure Software Update System{% endblock %}
+
+{% block content %}
+<!-- Top Stats Row -->
+<div class="grid-4">
+  <div class="stat-card">
+    <span class="stat-label">Published Releases</span>
+    <span class="stat-value" id="stat-releases">-</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">Active Clients</span>
+    <span class="stat-value" id="stat-clients">-</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">Security Incidents Blocked</span>
+    <span class="stat-value" id="stat-security" style="color: var(--danger);">-</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">Successful Installs</span>
+    <span class="stat-value" id="stat-installs" style="color: var(--success);">-</span>
+  </div>
+</div>
+
+<!-- Admin Session Card -->
+<div class="card" style="margin-bottom: 1.5rem;">
+  <div style="display: flex; justify-content: space-between; align-items: center;">
+    <div>
+      <span style="font-weight: 700; font-size: 1rem;"><i class="fa-solid fa-user-shield"></i> Publisher Session:</span>
+      <span id="session-user-badge" class="badge badge-warning" style="margin-left: 0.5rem;">Not Authenticated</span>
+    </div>
+    <div id="auth-action-container">
+      <button class="btn btn-secondary" onclick="openLoginModal()"><i class="fa-solid fa-right-to-bracket"></i> Login as Admin</button>
+    </div>
+  </div>
+</div>
+
+<!-- Main Split: Upload & Release on Left, Quick Publish & Releases on Right -->
+<div class="grid-2">
+  <!-- Upload & Sign Form -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title"><i class="fa-solid fa-file-arrow-up"></i> Upload &amp; Sign Software Package</h2>
+      <span class="badge badge-info">Ed25519 Signing</span>
+    </div>
+
+    <form id="upload-form" onsubmit="handleUpload(event)">
+      <div class="form-group">
+        <label for="package-file">Select Software Update ZIP Package</label>
+        <input type="file" id="package-file" accept=".zip" required>
+      </div>
+      <button type="submit" class="btn btn-secondary" style="width: 100%; margin-bottom: 1.25rem;">
+        <i class="fa-solid fa-cloud-arrow-up"></i> 1. Upload &amp; Calculate SHA-256 Hash
+      </button>
+    </form>
+
+    <div id="upload-result" style="display: none; background: #0b111e; padding: 1rem; border-radius: 6px; margin-bottom: 1.25rem; border: 1px solid var(--border-color);">
+      <div style="font-size: 0.85rem; color: var(--text-muted);">Package File: <strong id="res-filename" style="color: #fff;"></strong></div>
+      <div style="font-size: 0.85rem; color: var(--text-muted); margin: 0.25rem 0;">SHA-256 Digest: <code id="res-hash"></code></div>
+      <div style="font-size: 0.85rem; color: var(--text-muted);">Size: <strong id="res-size" style="color: #fff;"></strong> bytes</div>
+    </div>
+
+    <form id="publish-form" onsubmit="handlePublish(event)">
+      <input type="hidden" id="pub-filename">
+      <input type="hidden" id="pub-hash">
+      <input type="hidden" id="pub-size">
+
+      <div class="grid-2" style="margin-bottom: 0;">
+        <div class="form-group">
+          <label>Software Identifier</label>
+          <input type="text" id="pub-software-id" value="demoapp" required>
+        </div>
+        <div class="form-group">
+          <label>Version String (e.g. 1.1.0)</label>
+          <input type="text" id="pub-version" placeholder="1.1.0" required>
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-bottom: 0;">
+        <div class="form-group">
+          <label>Monotonic Release Sequence</label>
+          <input type="number" id="pub-sequence" placeholder="2" min="1" required>
+        </div>
+        <div class="form-group">
+          <label>Validity Window (Days)</label>
+          <input type="number" id="pub-exp-days" value="365" min="1" required>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Release Notes / Description</label>
+        <textarea id="pub-desc" rows="2" placeholder="Security telemetry and diagnostic enhancements"></textarea>
+      </div>
+
+      <button type="submit" class="btn btn-primary" id="btn-publish" style="width: 100%;">
+        <i class="fa-solid fa-signature"></i> 2. Sign Metadata &amp; Publish Release
+      </button>
+    </form>
+  </div>
+
+  <!-- Quick Pre-publish Demo Packages & Info -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title"><i class="fa-solid fa-bolt"></i> Quick Demonstration Publisher</h2>
+      <span class="badge badge-success">Pre-packaged</span>
+    </div>
+    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.25rem;">
+      Quickly publish pre-built DemoApp software releases for live demonstration to the professor.
+    </p>
+
+    <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.5rem;">
+      <button class="btn btn-secondary" onclick="quickPublish('1.1.0', 2, 'Performance enhancements & network telemetry')">
+        <i class="fa-solid fa-rocket"></i> Publish DemoApp v1.1.0 (Sequence 2)
+      </button>
+      <button class="btn btn-secondary" onclick="quickPublish('1.2.0', 3, 'Zero-trust architecture & threat telemetry')">
+        <i class="fa-solid fa-shield-virus"></i> Publish DemoApp v1.2.0 (Sequence 3)
+      </button>
+    </div>
+
+    <div style="background: #0b111e; border: 1px solid var(--border-color); border-radius: 6px; padding: 1rem;">
+      <h4 style="font-size: 0.85rem; color: var(--accent-cyan); margin-bottom: 0.5rem;"><i class="fa-solid fa-circle-info"></i> Security Architecture Note</h4>
+      <p style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.5;">
+        The update server generates a SHA-256 package digest and attaches canonical metadata signed by the publisher's Ed25519 private key. Even if an adversary intercepts or tampers with the package or database, the client independently verifies the cryptographic signature before executing any update.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- Published Releases Table -->
+<div class="card" style="margin-bottom: 2rem;">
+  <div class="card-header">
+    <h2 class="card-title"><i class="fa-solid fa-box-archive"></i> Published Software Releases</h2>
+    <button class="btn btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" onclick="loadReleases()">
+      <i class="fa-solid fa-arrows-rotate"></i> Refresh
+    </button>
+  </div>
+  <div class="table-responsive">
+    <table id="releases-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Software</th>
+          <th>Version</th>
+          <th>Seq</th>
+          <th>SHA-256 Digest</th>
+          <th>Ed25519 Signature</th>
+          <th>Published UTC</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td colspan="9" style="text-align: center; color: var(--text-muted);">Loading releases...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Logs Split: Security Incidents & Update Activity -->
+<div class="grid-2">
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title" style="color: var(--danger);"><i class="fa-solid fa-triangle-exclamation"></i> Security Event Logs</h2>
+      <span class="badge badge-danger">Live Threat Feed</span>
+    </div>
+    <div class="terminal" id="security-log-terminal">
+      <div class="terminal-line info">[SYS] Monitoring security logs in real time...</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title" style="color: var(--accent-cyan);"><i class="fa-solid fa-list-check"></i> Client Update Activity</h2>
+      <span class="badge badge-info">Audit Trail</span>
+    </div>
+    <div class="terminal" id="activity-log-terminal">
+      <div class="terminal-line info">[SYS] Client check, download and installation logs...</div>
+    </div>
+  </div>
+</div>
+
+<!-- Login Modal -->
+<div id="login-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
+  <div class="card" style="width: 100%; max-width: 420px;">
+    <div class="card-header">
+      <h2 class="card-title"><i class="fa-solid fa-lock"></i> Administrator Login</h2>
+      <button style="background: none; border: none; color: #fff; cursor: pointer; font-size: 1.2rem;" onclick="closeLoginModal()">&times;</button>
+    </div>
+    <form onsubmit="handleLogin(event)">
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" id="login-username" value="admin" required>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="login-password" value="Admin@SecureUpdate2026!" required>
+      </div>
+      <div id="login-error" style="display: none; color: var(--danger); font-size: 0.85rem; margin-bottom: 1rem;"></div>
+      <button type="submit" class="btn btn-primary" style="width: 100%;">Authenticate Session</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/admin.js"></script>
+{% endblock %}
+

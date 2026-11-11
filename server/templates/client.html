@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+
+{% block title %}Client Dashboard &bull; Secure Software Update System{% endblock %}
+
+{% block content %}
+<!-- Top Row: Client State & Update Checking -->
+<div class="grid-2">
+  <!-- Client Status Card -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title"><i class="fa-solid fa-desktop"></i> Client Device Telemetry</h2>
+      <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;" onclick="resetClientBaseline()">
+        <i class="fa-solid fa-arrow-rotate-left"></i> Reset to v1.0.0 Baseline
+      </button>
+    </div>
+    
+    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1.25rem;">
+      <div style="background: #0b111e; padding: 0.85rem; border-radius: 6px; border: 1px solid var(--border-color);">
+        <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Installed Version</div>
+        <div style="font-size: 1.6rem; font-weight: 800; color: #fff;" id="client-installed-version">DemoApp v1.0.0</div>
+      </div>
+      <div style="background: #0b111e; padding: 0.85rem; border-radius: 6px; border: 1px solid var(--border-color);">
+        <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Release Sequence</div>
+        <div style="font-size: 1.6rem; font-weight: 800; color: var(--primary-glow);" id="client-installed-seq">Seq: 1</div>
+      </div>
+    </div>
+
+    <div style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.6;">
+      <div>Client Identifier: <strong id="client-id" style="color: #fff;">client-alpha</strong></div>
+      <div>Security Policy: <span class="badge badge-success">Zero-Trust / Fail-Secure</span></div>
+      <div>Trusted Publisher Key: <code>Ed25519 (Configured)</code></div>
+    </div>
+  </div>
+
+  <!-- Update Checker Card -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title"><i class="fa-solid fa-cloud-arrow-down"></i> Software Update Channel</h2>
+      <span class="badge badge-info" id="update-badge">Status Unknown</span>
+    </div>
+
+    <div id="update-info-box" style="background: #0b111e; padding: 1rem; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom: 1.25rem;">
+      <div id="update-message" style="font-size: 0.9rem; color: var(--text-muted);">
+        Click below to query the update server for available software releases.
+      </div>
+      <div id="update-details" style="display: none; margin-top: 0.75rem; font-size: 0.85rem; line-height: 1.5;">
+        <div>Available Version: <strong id="avail-version" style="color: var(--accent-cyan);"></strong> (Sequence <span id="avail-seq"></span>)</div>
+        <div>Package Digest (Signed): <code id="avail-hash"></code></div>
+        <div>Expiration: <span id="avail-exp" style="color: var(--text-muted);"></span></div>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 0.75rem;">
+      <button class="btn btn-secondary" onclick="checkUpdates()" style="flex: 1;">
+        <i class="fa-solid fa-magnifying-glass"></i> Check for Updates
+      </button>
+      <button class="btn btn-success" id="btn-install-pipeline" onclick="executeStandardUpdate()" style="flex: 1;" disabled>
+        <i class="fa-solid fa-shield-check"></i> Run Secure Update
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- 11-Step Verification Pipeline Visualizer -->
+<div class="card" style="margin-bottom: 2rem;">
+  <div class="card-header">
+    <h2 class="card-title"><i class="fa-solid fa-network-wired"></i> Mandatory 11-Step Cryptographic Verification Pipeline</h2>
+    <span class="badge badge-info" id="pipeline-status-badge">Standby</span>
+  </div>
+  <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.25rem;">
+    Following FR14: No software update package is permitted to execute or install unless every single verification step passes independently.
+  </p>
+
+  <div class="pipeline-container" id="pipeline-steps">
+    <!-- Step 1 -->
+    <div class="step-card pending" id="step-1">
+      <div class="step-info">
+        <div class="step-num">1</div>
+        <div>
+          <div class="step-title">Retrieve Signed Release Metadata</div>
+          <div class="step-desc">Fetch canonical release metadata and detached Ed25519 signature over TLS</div>
+        </div>
+      </div>
+      <span class="badge badge-info status-tag">Pending</span>
+    </div>
+
+    <!-- Step 2 -->
+    <div class="step-card pending" id="step-2">
+      <div class="step-info">
+        <div class="step-num">2</div>
+        <div>
+          <div class="step-title">Ed25519 Digital Signature Verification</div>
+          <div class="step-desc">Verify authenticity and integrity of metadata against client's trusted public key</div>
+        </div>
+      </div>
+      <span class="badge badge-info status-tag">Pending</span>
+    </div>
+
+    <!-- Step 3 -->
+    <div class="step-card pending" id="step-3">
+      <div class="step-info">
+        <div class="step-num">3</div>
+        <div>
+          <div class="step-title">Metadata Freshness &amp; Expiration Validation</div>
+          <div class="step-desc">Verify validity window; prevent installation of expired releases</div>
+        </div>
+      </div>
+      <span class="badge badge-info status-tag">Pending</span>
+    </div>
+
+    <!-- Step 4 -->
+    <div class="step-card pending" id="step-4">
+      <div class="step-info">
+        <div class="step-num">4</div>
+        <div>
+          <div class="step-title">Version &amp; Monotonic Sequence Validation</div>
+          <div class="step-desc">Verify candidate is strictly newer than installed version (Rollback Protection)</div>
+        </div>
+      </div>
+      <span class="badge badge-info status-tag">Pending</span>
+    </div>
+
+    <!-- Step 5 -->
+    <div class="step-card pending" id="step-5">
+      <div class="step-info">
+        <div class="step-num">5</div>
+        <div>
+          <div class="step-title">Secure Package Download</div>
+          <div class="step-desc">Stream update archive over HTTPS; handle incomplete downloads</div>
+        </div>
+      </div>
+      <span class="badge badge-info status-tag">Pending</span>
+    </div>
+
+    <!-- Step 6 -->
+    <div class="step-card pending" id="step-6">
+      <div class="step-info">
+        <div class="step-num">6</div>
+        <div>
+          <div class="step-title">SHA-256 Digest Integrity Verification</div>
+          <div class="step-desc">Independently hash downloaded package and compare with verified signed digest</div>
+        </div>
+      </div>
+      <span class="badge badge-info status-tag">Pending</span>
+    </div>
+
+    <!-- Step 7 -->
+    <div class="step-card pending" id="step-7">
+      <div class="step-info">
+        <div class="step-num">7</div>
+        <div>
+          <div class="step-title">Package Content &amp; Path Traversal Inspection</div>
+          <div class="step-desc">Inspect archive structure to block Zip-Slip and path traversal attempts</div>
+        </div>
+      </div>
+      <span class="badge badge-info status-tag">Pending</span>
+    </div>
+
+    <!-- Step 8 -->
+    <div class="step-card pending" id="step-8">
+      <div class="step-info">
+        <div class="step-num">8</div>
+        <div>
+          <div class="step-title">Staged Installation &amp; Automatic Recovery</div>
+          <div class="step-desc">Backup active version, extract to staging, verify health, activate</div>
+        </div>
+      </div>
+      <span class="badge badge-info status-tag">Pending</span>
+    </div>
+
+    <!-- Step 9 -->
+    <div class="step-card pending" id="step-9">
+      <div class="step-info">
+        <div class="step-num">9</div>
+        <div>
+          <div class="step-title">Commit Trusted Local Version State</div>
+          <div class="step-desc">Update client state.json with new version and monotonic sequence number</div>
+        </div>
+      </div>
+      <span class="badge badge-info status-tag">Pending</span>
+    </div>
+
+    <!-- Step 10 -->
+    <div class="step-card pending" id="step-10">
+      <div class="step-info">
+        <div class="step-num">10</div>
+        <div>
+          <div class="step-title">Audit Logging &amp; Telemetry Reporting</div>
+          <div class="step-desc">Record outcome in local client audit log and notify central security monitor</div>
+        </div>
+      </div>
+      <span class="badge badge-info status-tag">Pending</span>
+    </div>
+  </div>
+</div>
+
+<!-- Attack Simulation Matrix (The 6 Professor Demo Scenarios) -->
+<div class="card" style="margin-bottom: 2rem;">
+  <div class="card-header">
+    <h2 class="card-title"><i class="fa-solid fa-shield-virus"></i> Professor Demonstration Attack Matrix</h2>
+    <span class="badge badge-danger">Live Attack Suite</span>
+  </div>
+  <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">
+    Trigger any of the 6 mandatory attack scenarios with a single click. The client verification engine will intercept each attack and fail-secure at the exact cryptographic boundary.
+  </p>
+
+  <div class="scenario-grid">
+    <!-- Scenario 1 -->
+    <div class="scenario-card">
+      <div>
+        <div class="scenario-title" style="color: var(--success);"><i class="fa-solid fa-circle-check"></i> Scenario 1 — Successful Update</div>
+        <div class="scenario-desc">Genuine DemoApp 1.1.0 update. SHA-256 and Ed25519 signature valid. Candidate strictly newer.</div>
+      </div>
+      <button class="btn btn-success" onclick="runAttackScenario(1)" style="width: 100%;">
+        <i class="fa-solid fa-play"></i> Run Scenario 1
+      </button>
+    </div>
+
+    <!-- Scenario 2 -->
+    <div class="scenario-card">
+      <div>
+        <div class="scenario-title" style="color: var(--danger);"><i class="fa-solid fa-file-code"></i> Scenario 2 — Package Tampering</div>
+        <div class="scenario-desc">Adversary modifies a file or injects byte payload inside the ZIP package after signing. Client detects SHA-256 mismatch.</div>
+      </div>
+      <button class="btn btn-danger" onclick="runAttackScenario(2)" style="width: 100%;">
+        <i class="fa-solid fa-bug"></i> Run Scenario 2
+      </button>
+    </div>
+
+    <!-- Scenario 3 -->
+    <div class="scenario-card">
+      <div>
+        <div class="scenario-title" style="color: var(--danger);"><i class="fa-solid fa-key"></i> Scenario 3 — Unauthorized Publisher</div>
+        <div class="scenario-desc">Attacker generates rogue Ed25519 keypair and signs a malicious update. Client rejects untrusted signature.</div>
+      </div>
+      <button class="btn btn-danger" onclick="runAttackScenario(3)" style="width: 100%;">
+        <i class="fa-solid fa-user-xmark"></i> Run Scenario 3
+      </button>
+    </div>
+
+    <!-- Scenario 4 -->
+    <div class="scenario-card">
+      <div>
+        <div class="scenario-title" style="color: var(--danger);"><i class="fa-solid fa-clock-rotate-left"></i> Scenario 4 — Rollback Attack</div>
+        <div class="scenario-desc">Client is on v1.1.0. Attacker replays genuine, validly-signed v1.0.0 release. Client rejects older version.</div>
+      </div>
+      <button class="btn btn-danger" onclick="runAttackScenario(4)" style="width: 100%;">
+        <i class="fa-solid fa-rotate-left"></i> Run Scenario 4
+      </button>
+    </div>
+
+    <!-- Scenario 5 -->
+    <div class="scenario-card">
+      <div>
+        <div class="scenario-title" style="color: var(--danger);"><i class="fa-solid fa-pen-nib"></i> Scenario 5 — Metadata Tampering</div>
+        <div class="scenario-desc">Adversary modifies package hash in release.json but retains original signature. Ed25519 verification fails.</div>
+      </div>
+      <button class="btn btn-danger" onclick="runAttackScenario(5)" style="width: 100%;">
+        <i class="fa-solid fa-file-signature"></i> Run Scenario 5
+      </button>
+    </div>
+
+    <!-- Scenario 6 -->
+    <div class="scenario-card">
+      <div>
+        <div class="scenario-title" style="color: var(--danger);"><i class="fa-solid fa-hourglass-end"></i> Scenario 6 — Expired Release</div>
+        <div class="scenario-desc">Attacker supplies a signed release whose expiration timestamp has passed. Expiration check blocks installation.</div>
+      </div>
+      <button class="btn btn-danger" onclick="runAttackScenario(6)" style="width: 100%;">
+        <i class="fa-solid fa-calendar-xmark"></i> Run Scenario 6
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Client Diagnostics Output Terminal -->
+<div class="card">
+  <div class="card-header">
+    <h2 class="card-title"><i class="fa-solid fa-terminal"></i> Client Diagnostic Console &amp; Audit Log</h2>
+    <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;" onclick="clearConsole()">
+      <i class="fa-solid fa-trash"></i> Clear
+    </button>
+  </div>
+  <div class="terminal" id="client-console">
+    <div class="terminal-line info">[CLIENT] Initialized. Ready for update verification pipeline...</div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/client.js"></script>
+{% endblock %}
+

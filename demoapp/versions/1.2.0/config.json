@@ -1,0 +1,8 @@
+{
+  "environment": "production",
+  "log_level": "DEBUG",
+  "port": 8443,
+  "telemetry_enabled": true,
+  "zero_trust": true
+}
+

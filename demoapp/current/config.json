@@ -1,0 +1,6 @@
+{
+  "environment": "production",
+  "log_level": "INFO",
+  "port": 8080,
+  "telemetry_enabled": true
+}
