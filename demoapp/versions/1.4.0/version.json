@@ -1,0 +1,19 @@
+{
+  "name": "DemoApp",
+  "software_id": "demoapp",
+  "version": "1.4.0",
+  "release_sequence": 5,
+  "build_date": "2026-11-11T14:00:00Z",
+  "features": [
+    "Baseline diagnostic engine",
+    "Basic local logging",
+    "Network performance optimizer",
+    "Enhanced cryptographic telemetry",
+    "Zero-trust session manager",
+    "Automated threat telemetry",
+    "Advanced Analytics Engine",
+    "Security Toolkit & Compliance Engine",
+    "Hardware-ready attestation interface"
+  ]
+}
+

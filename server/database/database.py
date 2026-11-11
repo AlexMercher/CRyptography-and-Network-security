@@ -43,9 +43,19 @@ def init_db(db_file=None):
         published_at TEXT NOT NULL,
         expires_at TEXT NOT NULL,
         status TEXT DEFAULT 'published',
+        revocation_reason TEXT,
+        revoked_at TEXT,
         UNIQUE(software_id, version)
     )
     """)
+    
+    # Auto-migrate table columns if upgrading existing database
+    cursor.execute("PRAGMA table_info(releases)")
+    existing_cols = [row["name"] for row in cursor.fetchall()]
+    if "revocation_reason" not in existing_cols:
+        cursor.execute("ALTER TABLE releases ADD COLUMN revocation_reason TEXT")
+    if "revoked_at" not in existing_cols:
+        cursor.execute("ALTER TABLE releases ADD COLUMN revoked_at TEXT")
     
     # 3. Clients
     cursor.execute("""

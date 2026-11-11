@@ -1,7 +1,8 @@
 import os
 import sys
+import secrets
 from pathlib import Path
-from flask import Flask, render_template, send_from_directory, redirect, url_for
+from flask import Flask, render_template, send_from_directory, redirect, url_for, session
 
 # Ensure project root is in sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -22,12 +23,27 @@ def create_app(test_config=None):
     )
     app.config["SECRET_KEY"] = "super-secret-cns-update-security-key-2026"
     app.config["MAX_CONTENT_LENGTH"] = 64 * 1024 * 1024  # 64 MB max upload
+    # DEMO_MODE defaults to False (Fail Closed) unless explicitly enabled via environment or configuration
+    app.config["DEMO_MODE"] = os.environ.get("CNS_DEMO_MODE", "false").lower() in ("true", "1", "yes")
+    app.config["ADMIN_RESET_TOKEN"] = os.environ.get("CNS_RESET_TOKEN", "cns-demo-reset-authorized-key-2026")
     
     if test_config:
         app.config.update(test_config)
         
     # Initialize SQLite database
     init_db()
+
+    @app.before_request
+    def ensure_csrf_token():
+        if "csrf_token" not in session:
+            session["csrf_token"] = secrets.token_hex(16)
+
+    @app.context_processor
+    def inject_template_globals():
+        return {
+            "csrf_token": session.get("csrf_token", ""),
+            "demo_mode": app.config.get("DEMO_MODE", False)
+        }
     
     # Register API Blueprints
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
@@ -47,6 +63,10 @@ def create_app(test_config=None):
     @app.route("/client")
     def client_page():
         return render_template("client.html")
+
+    @app.route("/how-it-works")
+    def how_it_works_page():
+        return render_template("how_it_works.html")
 
     return app
 

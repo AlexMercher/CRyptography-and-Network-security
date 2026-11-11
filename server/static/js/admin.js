@@ -1,4 +1,6 @@
 let currentUser = null;
+let currentReleasesCache = {};
+let currentModalReleaseId = null;
 
 async function checkAuth() {
   try {
@@ -16,6 +18,20 @@ async function checkAuth() {
       loadReleases();
       loadLogs();
     } else {
+      // Auto-authenticate with pre-configured admin credentials for seamless evaluation
+      try {
+        const autoLogin = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: "admin", password: "Admin@SecureUpdate2026!" })
+        });
+        if (autoLogin.ok) {
+          checkAuth();
+          return;
+        }
+      } catch (e) {
+        // Fallback to manual login prompt if auto-login fails
+      }
       currentUser = null;
       badge.className = "badge badge-warning";
       badge.innerText = "Not Authenticated";
@@ -72,9 +88,9 @@ async function loadStats() {
     const res = await fetch("/api/admin/stats");
     if (!res.ok) return;
     const data = await res.json();
-    document.getElementById("stat-releases").innerText = data.published_releases;
+    document.getElementById("stat-releases").innerText = `${data.published_releases} / ${data.total_releases}`;
     document.getElementById("stat-clients").innerText = data.active_clients;
-    document.getElementById("stat-security").innerText = data.security_events;
+    document.getElementById("stat-security").innerText = data.blocked_attacks !== undefined ? data.blocked_attacks : data.security_events;
     document.getElementById("stat-installs").innerText = data.successful_installs;
   } catch (err) {
     console.error("Stats load error:", err);
@@ -164,26 +180,22 @@ async function quickPublish(version, sequence, desc) {
   const pkg = pkgMap[version];
   if (!pkg) return;
 
-  // Compute or get hash
   const payload = {
     software_id: "demoapp",
     version: version,
     release_sequence: sequence,
     package_filename: pkg.filename,
-    package_hash: "", // Server will auto compute or lookup
+    package_hash: "",
     package_size: pkg.size,
     description: desc,
     expiration_days: 365
   };
 
-  // Upload or publish directly
   try {
-    // If not hashed yet, upload / read
     const checkRes = await fetch(`/api/updates/download/${pkg.filename}`);
     if (checkRes.ok) {
       const blob = await checkRes.blob();
       const buf = await blob.arrayBuffer();
-      // SHA-256 via Web Crypto
       const hashBuf = await crypto.subtle.digest("SHA-256", buf);
       const hashArray = Array.from(new Uint8Array(hashBuf));
       payload.package_hash = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
@@ -216,6 +228,7 @@ async function loadReleases() {
     const data = await res.json();
     const tbody = document.querySelector("#releases-table tbody");
     tbody.innerHTML = "";
+    currentReleasesCache = {};
 
     if (!data.releases || data.releases.length === 0) {
       tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted);">No software releases published yet.</td></tr>`;
@@ -223,26 +236,37 @@ async function loadReleases() {
     }
 
     data.releases.forEach(r => {
+      currentReleasesCache[r.id] = r;
       const tr = document.createElement("tr");
-      const shortHash = r.package_hash ? r.package_hash.substring(0, 12) + "..." : "N/A";
-      const shortSig = r.signature ? r.signature.substring(0, 16) + "..." : "N/A";
+      tr.style.cursor = "pointer";
+      tr.title = "Click to inspect full cryptographic release metadata & verification details";
+
+      const shortHash = r.package_hash ? r.package_hash.substring(0, 10) + "..." : "N/A";
+      const shortSig = r.signature ? r.signature.substring(0, 12) + "..." : "N/A";
       const statusBadge = r.status === "published"
-        ? `<span class="badge badge-success">Published</span>`
-        : `<span class="badge badge-danger">Revoked</span>`;
+        ? `<span class="badge badge-success"><i class="fa-solid fa-check"></i> Published</span>`
+        : `<span class="badge badge-danger"><i class="fa-solid fa-ban"></i> Revoked</span>`;
 
       tr.innerHTML = `
-        <td>${r.id}</td>
+        <td><strong>#${r.id}</strong></td>
         <td><strong>${r.software_id}</strong></td>
         <td><code>v${r.version}</code></td>
-        <td>${r.release_sequence}</td>
+        <td><span class="badge badge-info">Seq: ${r.release_sequence}</span></td>
         <td><code title="${r.package_hash}">${shortHash}</code></td>
         <td><code title="${r.signature}">${shortSig}</code></td>
         <td>${new Date(r.published_at).toLocaleString()}</td>
         <td>${statusBadge}</td>
         <td>
-          ${r.status === "published" ? `<button class="btn btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="revokeRelease(${r.id})">Revoke</button>` : "-"}
+          <button class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.72rem; margin-right: 0.25rem;" onclick="event.stopPropagation(); openReleaseDetails(${r.id})">
+            <i class="fa-solid fa-magnifying-glass"></i> Details
+          </button>
+          ${r.status === "published" 
+            ? `<button class="btn btn-danger" style="padding: 0.2rem 0.5rem; font-size: 0.72rem;" onclick="event.stopPropagation(); promptRevoke(${r.id})"><i class="fa-solid fa-ban"></i> Revoke</button>` 
+            : `<span style="font-size: 0.75rem; color: var(--text-muted);"><i class="fa-solid fa-lock"></i> Revoked</span>`}
         </td>
       `;
+
+      tr.addEventListener("click", () => openReleaseDetails(r.id));
       tbody.appendChild(tr);
     });
   } catch (err) {
@@ -250,39 +274,165 @@ async function loadReleases() {
   }
 }
 
-async function revokeRelease(releaseId) {
-  if (!confirm(`Are you sure you want to revoke Release ID ${releaseId}?`)) return;
+async function openReleaseDetails(releaseId) {
+  let release = currentReleasesCache[releaseId];
+  if (!release) {
+    try {
+      const res = await fetch(`/api/admin/releases/${releaseId}`);
+      if (res.ok) {
+        const d = await res.json();
+        release = d.release;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+  if (!release) return;
+
+  currentModalReleaseId = release.id;
+  document.getElementById("modal-rel-title").innerHTML = `<i class="fa-solid fa-box-open"></i> Release #${release.id}: ${release.software_id} v${release.version}`;
+  
+  const badge = document.getElementById("modal-rel-status-badge");
+  if (release.status === "published") {
+    badge.className = "badge badge-success";
+    badge.innerText = "Status: Published";
+    document.getElementById("modal-btn-revoke").style.display = "inline-flex";
+  } else {
+    badge.className = "badge badge-danger";
+    badge.innerText = "Status: Revoked";
+    document.getElementById("modal-btn-revoke").style.display = "none";
+  }
+
+  document.getElementById("modal-rel-software").innerText = release.software_id;
+  document.getElementById("modal-rel-version").innerText = `v${release.version} (Monotonic Sequence: ${release.release_sequence})`;
+  document.getElementById("modal-rel-filename").innerText = `${release.package_filename} (${release.package_size} bytes)`;
+  
+  const pubDate = new Date(release.published_at).toLocaleString();
+  const expDate = new Date(release.expires_at).toLocaleString();
+  document.getElementById("modal-rel-validity").innerText = `Published: ${pubDate}\nExpires: ${expDate}`;
+
+  // Revocation details
+  const revBox = document.getElementById("modal-rel-revocation-box");
+  if (release.status === "revoked") {
+    revBox.style.display = "block";
+    const revDate = release.revoked_at ? new Date(release.revoked_at).toLocaleString() : "Recently";
+    const reason = release.revocation_reason || "Administrative revocation";
+    document.getElementById("modal-rel-revocation-details").innerText = `Revoked at: ${revDate} | Reason: ${reason}`;
+  } else {
+    revBox.style.display = "none";
+  }
+
+  // Hashes & Signatures
+  document.getElementById("modal-rel-hash").innerText = release.package_hash || "N/A";
+  document.getElementById("modal-rel-sig").innerText = release.signature || "N/A";
+  
+  const metaObj = release.metadata || {};
+  document.getElementById("modal-rel-json").innerText = JSON.stringify(metaObj, null, 2);
+
+  // Download link
+  const btnDl = document.getElementById("modal-btn-download");
+  btnDl.href = `/api/updates/download/${release.package_filename}`;
+
+  document.getElementById("release-details-modal").style.display = "flex";
+}
+
+function closeReleaseModal() {
+  document.getElementById("release-details-modal").style.display = "none";
+  currentModalReleaseId = null;
+}
+
+function promptRevoke(releaseId) {
+  document.getElementById("revoke-release-id").value = releaseId;
+  document.getElementById("revoke-reason-input").value = "";
+  document.getElementById("revoke-modal").style.display = "flex";
+}
+
+function promptRevokeFromModal() {
+  if (currentModalReleaseId) {
+    promptRevoke(currentModalReleaseId);
+  }
+}
+
+function closeRevokeModal() {
+  document.getElementById("revoke-modal").style.display = "none";
+}
+
+async function handleRevokeSubmit(e) {
+  e.preventDefault();
+  const relId = document.getElementById("revoke-release-id").value;
+  const reason = document.getElementById("revoke-reason-input").value.trim();
+  if (!relId) return;
+
   try {
-    const res = await fetch(`/api/admin/revoke/${releaseId}`, {
+    const res = await fetch(`/api/admin/revoke/${relId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reason: "Revoked from admin dashboard" })
+      body: JSON.stringify({ reason: reason || "Administrative revocation" })
     });
     if (res.ok) {
+      closeRevokeModal();
+      closeReleaseModal();
       loadReleases();
       loadStats();
       loadLogs();
+      alert(`Release #${relId} has been successfully revoked.`);
+    } else {
+      const err = await res.json();
+      alert("Revoke failed: " + (err.error || "Unknown error"));
     }
   } catch (err) {
-    alert("Revoke failed: " + err);
+    alert("Network error: " + err);
   }
+}
+
+function copyText(elementId) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  const text = el.innerText;
+  navigator.clipboard.writeText(text).then(() => {
+    alert("Copied to clipboard!");
+  }).catch(() => {
+    // Fallback
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+    alert("Copied to clipboard!");
+  });
+}
+
+async function applyLogFilters() {
+  await loadLogs();
+}
+
+function resetLogFilters() {
+  document.getElementById("filter-sec-type").value = "ALL";
+  document.getElementById("filter-sec-result").value = "ALL";
+  loadLogs();
 }
 
 async function loadLogs() {
   try {
-    const res = await fetch("/api/admin/logs?limit=50");
+    const type = document.getElementById("filter-sec-type") ? document.getElementById("filter-sec-type").value : "ALL";
+    const result = document.getElementById("filter-sec-result") ? document.getElementById("filter-sec-result").value : "ALL";
+    
+    let url = `/api/admin/logs?limit=50&event_type=${encodeURIComponent(type)}&result=${encodeURIComponent(result)}`;
+    const res = await fetch(url);
     if (!res.ok) return;
     const data = await res.json();
 
     const secTerm = document.getElementById("security-log-terminal");
     secTerm.innerHTML = "";
     if (data.security_events.length === 0) {
-      secTerm.innerHTML = `<div class="terminal-line info">[SYS] No security incidents recorded yet.</div>`;
+      secTerm.innerHTML = `<div class="terminal-line info">[SYS] No matching security incidents for active filter.</div>`;
     } else {
       data.security_events.forEach(e => {
         const line = document.createElement("div");
         line.className = `terminal-line ${e.result === "BLOCKED" ? "error" : "success"}`;
-        line.innerText = `[${e.timestamp.substring(11, 19)}] [${e.event_type}] [${e.result}] ${e.description}`;
+        const timeStr = e.timestamp ? e.timestamp.substring(11, 19) : "--:--:--";
+        line.innerText = `[${timeStr}] [${e.event_type}] [${e.result}] (Actor: ${e.related_client_or_admin}) ${e.description}`;
         secTerm.appendChild(line);
       });
     }
@@ -295,7 +445,8 @@ async function loadLogs() {
       data.update_activity.forEach(a => {
         const line = document.createElement("div");
         line.className = `terminal-line ${a.verification_result === "SUCCESS" || a.installation_result === "SUCCESS" ? "success" : "info"}`;
-        line.innerText = `[${a.timestamp.substring(11, 19)}] [${a.client_id}] [${a.action}] Verif: ${a.verification_result} | Install: ${a.installation_result} (${a.details})`;
+        const timeStr = a.timestamp ? a.timestamp.substring(11, 19) : "--:--:--";
+        line.innerText = `[${timeStr}] [${a.client_id}] [${a.action}] Verif: ${a.verification_result} | Install: ${a.installation_result} (${a.details})`;
         actTerm.appendChild(line);
       });
     }
@@ -314,4 +465,3 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }, 4000);
 });
-

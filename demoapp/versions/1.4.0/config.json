@@ -1,0 +1,9 @@
+{
+  "environment": "production",
+  "log_level": "INFO",
+  "port": 8080,
+  "analytics_enabled": true,
+  "compliance_audit_enabled": true,
+  "security_toolkit_version": "2.4.0"
+}
+

@@ -10,7 +10,8 @@ if str(PROJECT_ROOT) not in sys.path:
 from server.app import create_app
 
 def main():
-    app = create_app()
+    demo_enabled = "--demo" in sys.argv or os.environ.get("CNS_DEMO_MODE", "false").lower() in ("true", "1", "yes")
+    app = create_app({"DEMO_MODE": demo_enabled})
     cert_file = PROJECT_ROOT / "certs" / "server.crt"
     key_file = PROJECT_ROOT / "certs" / "server.key"
     
@@ -20,6 +21,11 @@ def main():
     print("Default Admin Credentials:")
     print("  Username: admin")
     print("  Password: Admin@SecureUpdate2026!")
+    print("-" * 60)
+    if demo_enabled:
+        print("[+] Demonstration Mode: ENABLED (Authorized client reset enabled on loopback)")
+    else:
+        print("[-] Demonstration Mode: DISABLED (Fail-closed default; pass --demo to enable)")
     print("-" * 60)
     
     if cert_file.exists() and key_file.exists():

@@ -475,3 +475,397 @@ footer {
   background-color: #0f172a;
 }
 
+
+/* ========================================================
+   How It Works & Interactive Architecture Styles
+   ======================================================== */
+
+.subnav-sticky {
+  position: sticky;
+  top: 70px;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border-color);
+  padding: 0.75rem 0;
+  margin-bottom: 2rem;
+  z-index: 90;
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+}
+
+.subnav-link {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.subnav-link:hover, .subnav-link.active {
+  color: #fff;
+  background: var(--bg-card);
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.25);
+}
+
+/* SVG Interactive Nodes */
+.svg-interactive-node {
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.svg-interactive-node:hover rect {
+  stroke: var(--primary-glow) !important;
+  stroke-width: 2.5px !important;
+  filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.6));
+}
+
+.svg-interactive-node.active-node rect {
+  stroke: #10b981 !important;
+  stroke-width: 3px !important;
+  filter: drop-shadow(0 0 12px rgba(16, 185, 129, 0.8));
+}
+
+.svg-interactive-node.pulse-node rect {
+  animation: svgPulse 1.5s infinite;
+}
+
+@keyframes svgPulse {
+  0% { filter: drop-shadow(0 0 4px rgba(6, 182, 212, 0.4)); }
+  50% { filter: drop-shadow(0 0 16px rgba(6, 182, 212, 0.9)); stroke-width: 3.5px; }
+  100% { filter: drop-shadow(0 0 4px rgba(6, 182, 212, 0.4)); }
+}
+
+.svg-flow-path {
+  stroke-dasharray: 6;
+  animation: dashAnimation 1.5s linear infinite;
+}
+
+@keyframes dashAnimation {
+  from { stroke-dashoffset: 24; }
+  to { stroke-dashoffset: 0; }
+}
+
+/* Player Controls Bar */
+.player-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #0b111e;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.75rem 1.25rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.player-btn-group {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.player-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: #fff;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.player-btn:hover {
+  background: var(--primary);
+  border-color: var(--primary-glow);
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+}
+
+.speed-badge {
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+}
+
+.speed-badge.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary-glow);
+}
+
+/* Crypto Avalanche Box */
+.avalanche-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+@media (max-width: 800px) {
+  .avalanche-container {
+    grid-template-columns: 1fr;
+  }
+}
+
+.avalanche-box {
+  background: #0b111e;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.diff-char {
+  background: rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+  font-weight: 800;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+/* Limitation Cards */
+.limitation-card {
+  background: #0b111e;
+  border: 1px solid var(--border-color);
+  border-left: 4px solid var(--warning);
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.limitation-card.critical {
+  border-left-color: var(--danger);
+}
+
+.limitation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.limitation-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #fff;
+}
+
+/* Sticky Subnavigation for How It Works */
+.subnav-sticky {
+  position: sticky;
+  top: 60px;
+  z-index: 90;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(12px);
+  padding: 0.75rem 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  margin: -2rem -2rem 2rem -2rem;
+}
+
+/* Tab Switching */
+.tab-group {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 1.5rem;
+}
+
+.tab-btn {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  font-weight: 700;
+  padding: 0.6rem 1.25rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  color: #fff;
+}
+
+.tab-btn.active {
+  color: var(--accent-cyan);
+  border-bottom-color: var(--accent-cyan);
+  background: rgba(6, 182, 212, 0.05);
+}
+
+.tab-pane {
+  display: none;
+}
+
+.tab-pane.active {
+  display: block;
+}
+
+/* Architecture Component Info Drawer / Box */
+.arch-details-box {
+  background: #0d1424;
+  border: 1px solid var(--accent-cyan);
+  border-radius: 10px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 20px rgba(6, 182, 212, 0.15);
+  transition: all 0.3s ease;
+}
+
+/* Lifecycle Step Indicators */
+.lifecycle-track {
+  display: grid;
+  grid-template-columns: repeat(11, 1fr);
+  gap: 0.4rem;
+  margin-bottom: 1.5rem;
+}
+
+@media (max-width: 1000px) {
+  .lifecycle-track {
+    grid-template-columns: repeat(6, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .lifecycle-track {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.lifecycle-step-node {
+  background: #0b111e;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.5rem 0.25rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.lifecycle-step-node:hover {
+  border-color: var(--primary-glow);
+  background: #111a2e;
+}
+
+.lifecycle-step-node.active {
+  background: rgba(2, 132, 199, 0.2);
+  border-color: var(--primary-glow);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+}
+
+.lifecycle-step-node.completed {
+  border-color: var(--success);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.lifecycle-step-node.failed {
+  border-color: var(--danger);
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.lifecycle-step-num {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--text-muted);
+}
+
+.lifecycle-step-node.active .lifecycle-step-num {
+  color: var(--primary-glow);
+}
+
+.lifecycle-step-node.completed .lifecycle-step-num {
+  color: var(--success);
+}
+
+/* Attack Simulation Grid */
+.attack-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .attack-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.attack-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: transform 0.2s, border-color 0.2s;
+}
+
+.attack-card:hover {
+  border-color: var(--primary-glow);
+  transform: translateY(-2px);
+}
+
+.attack-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.attack-terminal {
+  background: var(--terminal-bg);
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  padding: 0.75rem;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.8rem;
+  color: #38bdf8;
+  max-height: 150px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  margin-top: 0.75rem;
+}
+
+/* Comparison Tables */
+.table-comparison {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  font-size: 0.9rem;
+}
+
+.table-comparison th, .table-comparison td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.table-comparison th {
+  background: #0b111e;
+  color: var(--text-muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  letter-spacing: 0.5px;
+}
+
+.table-comparison tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+

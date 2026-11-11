@@ -13,6 +13,7 @@ from client.verifier import Verifier
 from client.version_manager import VersionManager
 from client.downloader import Downloader
 from client.installer import SecureInstaller
+from common.crypto_engine import compute_sha256
 
 class ClientUpdater:
     def __init__(
@@ -190,17 +191,22 @@ class ClientUpdater:
             with open(pkg_path, "ab") as f:
                 f.write(b"\x00\xDE\xAD\xBE\xEF_TAMPERED_INJECTION")
 
-        # Step 6 & 7: Calculate SHA-256 and Compare with Signed Hash
-        hash_valid, hash_msg = self.verifier.verify_package_hash(pkg_path, metadata.get("package_hash", ""))
-        if not hash_valid:
-            record_step(6, "SHA-256 Integrity Verification", False, hash_msg)
+        # Step 6: Calculate Package SHA-256 Digest
+        computed_hash = compute_sha256(pkg_path)
+        record_step(6, "Calculate Package SHA-256 Digest", True, f"Calculated SHA-256: {computed_hash}")
+
+        # Step 7: Compare Calculated Hash with Signed Metadata Hash
+        expected_hash = metadata.get("package_hash", "").strip().lower()
+        if computed_hash != expected_hash:
+            hash_msg = f"SHA-256 integrity check failed! Computed: {computed_hash}, Expected: {expected_hash}"
+            record_step(7, "Verify Package Hash Match", False, hash_msg)
             self.report_to_server(
                 "VERIFY", "HASH_MISMATCH",
                 details=hash_msg, release_id=release_id,
                 security_event={"type": "PACKAGE_TAMPER_DETECTED", "description": hash_msg}
             )
-            return {"success": False, "error_stage": 6, "message": hash_msg, "steps": steps}
-        record_step(6, "SHA-256 Integrity Verification", True, hash_msg)
+            return {"success": False, "error_stage": 7, "message": hash_msg, "steps": steps}
+        record_step(7, "Verify Package Hash Match", True, f"SHA-256 digest match verified ({computed_hash}).")
 
         # Step 8: Validate Package Format and Installation Contents (Anti-Traversal)
         safe_archive, safe_msg = self.installer.validate_package_contents(pkg_path)

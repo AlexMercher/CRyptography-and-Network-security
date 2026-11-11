@@ -84,26 +84,60 @@ def get_releases():
     releases = ReleaseManager.list_releases(software_id)
     return jsonify({"releases": releases}), 200
 
+@admin_bp.route("/releases/<int:release_id>", methods=["GET"])
+@login_required
+def get_release_details(release_id: int):
+    release = ReleaseManager.get_release_by_id(release_id)
+    if not release:
+        return jsonify({"error": f"Release ID {release_id} not found"}), 404
+    return jsonify({"release": release}), 200
+
 @admin_bp.route("/revoke/<int:release_id>", methods=["POST"])
 @login_required
 def revoke_release(release_id: int):
     data = request.get_json() or {}
-    reason = data.get("reason", "Revoked by administrator")
+    reason = data.get("reason", "Revoked by administrator").strip()
+    if not reason:
+        reason = "Revoked by administrator"
     success = ReleaseManager.revoke_release(release_id, reason)
     if success:
-        return jsonify({"message": f"Release {release_id} revoked successfully"}), 200
+        return jsonify({
+            "message": f"Release {release_id} revoked successfully",
+            "release_id": release_id,
+            "revocation_reason": reason
+        }), 200
     return jsonify({"error": "Release not found"}), 404
 
 @admin_bp.route("/logs", methods=["GET"])
 @login_required
 def get_logs():
     limit = int(request.args.get("limit", 100))
+    event_type = request.args.get("event_type", "").strip()
+    result = request.args.get("result", "").strip()
+    search = request.args.get("search", "").strip()
+
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute("SELECT * FROM security_events ORDER BY id DESC LIMIT ?", (limit,))
+    # Dynamic filtering for security events
+    sec_query = "SELECT * FROM security_events WHERE 1=1"
+    params = []
+    if event_type and event_type != "ALL":
+        sec_query += " AND event_type = ?"
+        params.append(event_type)
+    if result and result != "ALL":
+        sec_query += " AND result = ?"
+        params.append(result)
+    if search:
+        sec_query += " AND (description LIKE ? OR related_client_or_admin LIKE ?)"
+        params.extend([f"%{search}%", f"%{search}%"])
+    sec_query += " ORDER BY id DESC LIMIT ?"
+    params.append(limit)
+
+    cursor.execute(sec_query, params)
     sec_rows = cursor.fetchall()
     
+    # Client update activity
     cursor.execute("SELECT * FROM update_activity ORDER BY id DESC LIMIT ?", (limit,))
     act_rows = cursor.fetchall()
     conn.close()
@@ -112,7 +146,12 @@ def get_logs():
     act_logs = [dict(r) for r in act_rows]
     return jsonify({
         "security_events": sec_logs,
-        "update_activity": act_logs
+        "update_activity": act_logs,
+        "filters": {
+            "event_type": event_type or "ALL",
+            "result": result or "ALL",
+            "search": search
+        }
     }), 200
 
 @admin_bp.route("/stats", methods=["GET"])
@@ -122,18 +161,31 @@ def get_stats():
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) as c FROM releases WHERE status = 'published'")
     pub_count = cursor.fetchone()["c"]
+    cursor.execute("SELECT COUNT(*) as c FROM releases WHERE status = 'revoked'")
+    rev_count = cursor.fetchone()["c"]
+    cursor.execute("SELECT COUNT(*) as c FROM releases")
+    total_releases = cursor.fetchone()["c"]
     cursor.execute("SELECT COUNT(*) as c FROM clients")
     client_count = cursor.fetchone()["c"]
     cursor.execute("SELECT COUNT(*) as c FROM security_events")
     sec_count = cursor.fetchone()["c"]
+    cursor.execute("SELECT COUNT(*) as c FROM security_events WHERE result = 'BLOCKED'")
+    blocked_count = cursor.fetchone()["c"]
     cursor.execute("SELECT COUNT(*) as c FROM update_activity WHERE action = 'INSTALL' AND installation_result = 'SUCCESS'")
     success_installs = cursor.fetchone()["c"]
+    cursor.execute("SELECT COUNT(*) as c FROM update_activity")
+    total_activity = cursor.fetchone()["c"]
     conn.close()
     
     return jsonify({
         "published_releases": pub_count,
+        "revoked_releases": rev_count,
+        "total_releases": total_releases,
         "active_clients": client_count,
         "security_events": sec_count,
-        "successful_installs": success_installs
+        "blocked_attacks": blocked_count,
+        "successful_installs": success_installs,
+        "total_activities": total_activity,
+        "data_source": "live_sqlite_database"
     }), 200
 

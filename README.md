@@ -26,6 +26,7 @@ The architecture enforces a **Zero-Trust Client Principle**: *The server distrib
                  | - Release Metadata & Audit Logs   |
                  | - Admin Dashboard: /admin         |
                  | - Client Dashboard: /client       |
+                 | - How It Works Page: /how-it-works|
                  +-----------------+-----------------+
                                    |
                                    | HTTPS (Encrypted Download)
@@ -45,13 +46,13 @@ The architecture enforces a **Zero-Trust Client Principle**: *The server distrib
 
 | Component | Modules & Files | Functionality |
 |---|---|---|
-| **1. Admin Dashboard** | `server/templates/admin.html`<br>`server/static/js/admin.js` | Web interface to authenticate, upload packages, auto-hash with SHA-256, sign with Ed25519, publish releases, view audit and security logs. |
-| **2. Update Server** | `server/app.py`<br>`server/routes/`<br>`server/database/` | Flask backend, SQLite DB (`update_system.db`), REST endpoints for update checks, encrypted package distribution, activity logging. |
+| **1. Admin Dashboard** | `server/templates/admin.html`<br>`server/static/js/admin.js` | Web interface to authenticate, upload packages, auto-hash with SHA-256, sign with Ed25519, publish releases, view clickable release metadata, revoke releases with reasons, and filter security events. |
+| **2. Update Server** | `server/app.py`<br>`server/routes/`<br>`server/database/` | Flask backend, SQLite DB (`update_system.db`), REST endpoints for update checks, encrypted package distribution, activity logging, diagnostic reports. |
 | **3. Cryptographic Engine** | `common/crypto_engine.py` | Deterministic JSON canonicalization, streaming SHA-256 chunked hashing, Ed25519 key generation, detached signature creation & verification. |
 | **4. Client Application** | `client/updater.py`<br>`client/downloader.py`<br>`client/verifier.py` | Client updater with 11-step pipeline, TLS download with CA cert validation, independent cryptographic verification. |
 | **5. Secure Installation Engine** | `client/installer.py`<br>`client/version_manager.py` | Anti-traversal / Zip-Slip defense, pre-installation backup, staged extraction, health verification, atomic commit to `state.json`, automatic recovery. |
 | **6. Logging and Monitoring** | `server/database/database.py` | Records package publication, client checks, downloads, hash mismatches, signature failures, rollback attempts, and installations. |
-| **7. Attack Simulation Suite** | `simulate_attacks.py`<br>`tests/` | CLI simulation runner and 29 automated test cases covering tampering, replay, rogue signatures, path traversal, expired releases. |
+| **7. Attack Simulation & Education** | `simulate_attacks.py`<br>`server/templates/how_it_works.html` | CLI simulation runner (6 real attack scenarios), automated pytest suite (34 tests), and interactive web education page with SVG diagram and crypto labs. |
 
 ---
 
@@ -67,9 +68,25 @@ The architecture enforces a **Zero-Trust Client Principle**: *The server distrib
 
 ---
 
-## 4. Quick Start & Execution Guide
+## 4. The 11-Step Fail-Secure Verification Pipeline
 
-### 4.1 Activate Conda Environment & Install Dependencies
+1. **Step 1: Retrieve Signed Release Metadata** &mdash; Fetches signed manifest via HTTPS; parses JSON schema.
+2. **Step 2: Ed25519 Digital Signature Verification** &mdash; Canonicalizes JSON fields and verifies detached signature against pinned publisher public key.
+3. **Step 3: Metadata Validation and Freshness Check** &mdash; Validates schema integrity and checks UTC expiration against system clock.
+4. **Step 4: Version and Rollback Validation** &mdash; Ensures candidate version follows SemVer and `candidate_sequence > installed_sequence`.
+5. **Step 5: Package Download to Isolated Staging** &mdash; Streams download into quarantine `.tmp` buffer.
+6. **Step 6: Calculate Package SHA-256 Digest** &mdash; Computes cryptographic digest over downloaded archive in 64 KB memory chunks.
+7. **Step 7: Verify Package Hash Match** &mdash; Strict constant-time equality check against metadata signed `package_hash`.
+8. **Step 8: Package Format & Path Traversal Inspection** &mdash; Inspects ZIP entries to block Zip Slip (`..`, absolute paths).
+9. **Step 9: Secure Staged Installation & Health Check** &mdash; Extracts to `.staging/`, backs up current version, verifies manifest integrity.
+10. **Step 10: Commit Trusted Installed Version State** &mdash; Atomically swaps directories and writes updated `demoapp/state.json`.
+11. **Step 11: Telemetry & Final Audit Logging** &mdash; Sends installation completion telemetry to server audit logs.
+
+---
+
+## 5. Quick Start & Execution Guide
+
+### 5.1 Activate Conda Environment & Install Dependencies
 
 ```powershell
 # Activate environment
@@ -79,26 +96,26 @@ conda activate ./venv
 pip install -r requirements.txt
 ```
 
-### 4.2 Run All Unit, Integration & Security Tests
+### 5.2 Run All Unit, Integration & Security Tests
 
-Run the full pytest suite (29 test cases covering TC01 through TC18):
+Run the full pytest suite (**34 tests** covering TC01 through TC18 and UI endpoints):
 
 ```powershell
 pytest -v
 ```
 
-All 29 tests pass with 100% success rate:
+All 34 tests pass with 100% success rate:
 - `tests/test_hashing.py`: SHA-256 determinism, tampering detection, and chunked verification.
 - `tests/test_signatures.py`: Ed25519 signing, verification, metadata alteration detection, rogue key rejection, expiration check.
 - `tests/test_tampering.py`: TC04 (package byte tampering) and TC05 (metadata tampering).
 - `tests/test_rollback.py`: TC08 (version rollback blocked) and TC09 (sequence replay blocked).
 - `tests/test_installation.py`: TC15 (Zip-Slip path traversal blocked), TC16 (valid update), TC17 (installation failure rollback to backup).
-- `tests/test_server_api.py`: TC10 & TC11 (unauthorized access and publishing blocked).
+- `tests/test_server_api.py`: TC10 & TC11 (unauthorized access and publishing blocked), login, log filtering, release details, client history, diagnostic export, and `/how-it-works` template rendering.
 - `tests/test_integration.py`: TC07 (unauthorized publisher), TC12 (interrupted download), TC13 (mismatched software ID), TC14 (expired metadata), TC18 (invalid TLS certificate rejected).
 
 ---
 
-## 5. Live Professor Demonstration Scenarios
+## 6. Live Professor Demonstration Scenarios
 
 To conduct the live demonstration in front of your professor, you can use either the **Automated CLI Suite** or the **Interactive Web Dashboards**.
 
@@ -124,80 +141,33 @@ python simulate_attacks.py --scenario 6   # Expired release (Timestamp in past)
 
 ### Option B: Interactive Web Dashboards
 
-1. Start the HTTPS Update Server:
+1. **Start the HTTPS Update Server:**
 ```powershell
 python run_server.py
 ```
 
-2. Open the **Admin Dashboard** in your browser:
+2. **Open the Admin Dashboard:**
    - URL: `https://127.0.0.1:5000/admin`
-   - Default Administrator Credentials:
-     - Username: `admin`
-     - Password: `Admin@SecureUpdate2026!`
-   - Capabilities:
-     - View real-time security events and client download telemetry.
-     - Upload custom `.zip` software update packages.
-     - Automatically compute SHA-256 hashes.
-     - Digitally sign and publish releases using Ed25519.
-     - Revoke compromised releases with a single click.
+   - Features: Clickable release rows with detailed metadata inspector modal, release revocation with reasons, security event filtering (event type, result, search), and live database statistics.
 
-3. Open the **Client Dashboard** in your browser:
+3. **Open the Client Dashboard:**
    - URL: `https://127.0.0.1:5000/client`
-   - Capabilities:
-     - View currently installed DemoApp version (`v1.0.0`, Sequence 1).
-     - Query server for available updates.
-     - Watch the live **11-Step Cryptographic Verification Pipeline** execute step-by-step with glowing indicators.
-     - Click any scenario in the **Professor Demonstration Attack Matrix** to show instant fail-secure detection!
+   - Features: Side-by-side version comparison card, package metadata/digest inspection, live 11-step verification pipeline cards, understandable threat failure breakdown, installation history, and downloadable JSON diagnostic report.
+
+4. **Open the "How It Works" Explanation Page:**
+   - URL: `https://127.0.0.1:5000/how-it-works`
+   - Features:
+     1. Interactive SVG Architecture Diagram with clickable component inspector.
+     2. Cryptography Explained with live WebCrypto SHA-256 avalanche effect simulator and Ed25519 signature verifier.
+     3. 11-step interactive Complete Update Lifecycle player (Play, Pause, Prev, Next, Restart, Speed controls).
+     4. Attack Simulations Lab executing live backend tests for all 6 attack scenarios.
+     5. Trust & Key Management breakdown (transport vs payload authenticity).
+     6. Rigorous disclosure of prototype security limitations & threat model boundaries.
 
 ---
 
-## 6. Detailed Demonstration Scenario Walkthrough
+## 7. System UI Screenshots
 
-### Scenario 1 — Successful Update
-- **Initial State:** Client has DemoApp 1.0.0 installed.
-- **Action:** Administrator signs and publishes DemoApp 1.1.0 (Sequence 2).
-- **Execution:** Client retrieves signed metadata over HTTPS, verifies Ed25519 signature with trusted public key, verifies version is newer, downloads package, confirms SHA-256 hash match, validates archive safety, stages, and installs.
-- **Verdict:** `PASSED` — DemoApp successfully upgraded to 1.1.0.
-
-### Scenario 2 — Package Tampering Attack
-- **Initial State:** Client has DemoApp 1.0.0 installed.
-- **Attack Vector:** An adversary intercepts the package during transit or modifies archive bytes on disk.
-- **Client Defense:** Client computes SHA-256 hash over the downloaded file and compares it to the signed package hash from the metadata.
-- **Verdict:** `ATTACK PREVENTED` — SHA-256 mismatch detected at Step 6. Installation rejected.
-
-### Scenario 3 — Unauthorized Publisher Attack
-- **Initial State:** Client has DemoApp 1.0.0 installed.
-- **Attack Vector:** An adversary generates their own rogue Ed25519 keypair and signs a malicious update.
-- **Client Defense:** Client verifies signature using only the pre-provisioned trusted public key (`keys/publisher_public.pem`).
-- **Verdict:** `ATTACK PREVENTED` — Signature verification fails at Step 2. Update rejected.
-
-### Scenario 4 — Rollback Attack
-- **Initial State:** Client has DemoApp 1.1.0 installed (Sequence 2).
-- **Attack Vector:** An attacker supplies a previously valid, legitimately signed DemoApp 1.0.0 release (Sequence 1).
-- **Client Defense:** Client inspects its local trusted state (`client/storage/state.json`). Even though the digital signature is genuine, the client detects `1.0.0 <= 1.1.0` and `sequence 1 <= 2`.
-- **Verdict:** `ATTACK PREVENTED` — Rollback blocked at Step 4. Update rejected.
-
-### Scenario 5 — Metadata Tampering Attack
-- **Initial State:** Client has DemoApp 1.0.0 installed.
-- **Attack Vector:** An adversary alters the version number or package hash inside `release.json` while attempting to keep the publisher's original signature.
-- **Client Defense:** Canonical JSON representation ensures any byte-level change causes Ed25519 verification to fail.
-- **Verdict:** `ATTACK PREVENTED` — Tampering detected at Step 2. Update rejected.
-
-### Scenario 6 — Expired Release Attack
-- **Initial State:** Client has DemoApp 1.0.0 installed.
-- **Attack Vector:** An adversary replays a signed release whose `expiration_timestamp` has elapsed.
-- **Client Defense:** Client checks metadata expiration window against UTC clock.
-- **Verdict:** `ATTACK PREVENTED` — Freshness validation fails at Step 3. Update rejected.
-
----
-
-## 7. Security Incident Logging & Fail-Secure Design
-
-Every rejection records a security event in SQLite containing:
-- Timestamp (UTC ISO 8601)
-- Incident Classification (`PACKAGE_TAMPER_DETECTED`, `INVALID_SIGNATURE`, `ROLLBACK_ATTEMPT`, `EXPIRED_OR_INVALID_METADATA`, `ZIP_SLIP_ATTEMPT`)
-- Source Client / Target User
-- Action Taken: `BLOCKED`
-
-The system strictly adheres to the **Fail-Secure Principle**: If any single check encounters an error, the pipeline immediately halts and aborts before package extraction or execution.
-
+- **Admin Dashboard**: `docs/screenshots/admin_dashboard.png`
+- **Client Dashboard**: `docs/screenshots/client_dashboard.png`
+- **How It Works Interactive Page**: `docs/screenshots/how_it_works.png`

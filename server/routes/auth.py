@@ -44,6 +44,7 @@ def login():
         return jsonify({"error": "Invalid username or password"}), 401
         
     session["user"] = admin["username"]
+    session["role"] = "admin"
     log_security_event(
         "LOGIN_SUCCESS",
         f"Administrator '{admin['username']}' logged in successfully",

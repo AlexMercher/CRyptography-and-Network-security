@@ -32,10 +32,25 @@ def compute_sha256(source: Union[bytes, str, Path]) -> str:
 
 def canonicalize_json(data: Dict[str, Any]) -> bytes:
     """
-    Serializes a dictionary into canonical UTF-8 JSON bytes:
-    - Sorted keys
-    - Compact delimiters (no extra whitespace: ',', ':')
-    - Ensures deterministic representation for cryptographic signing.
+    Serializes a dictionary into deterministic canonical UTF-8 JSON bytes for
+    cryptographic signing and verification.
+
+    Supported Schema & Types:
+      - Dictionary objects with string keys (recursively sorted lexicographically)
+      - Strings (UTF-8 encoded, standard JSON escaping)
+      - Integers (exact decimal formatting)
+      - Booleans (true, false) and null
+      - Lists / Arrays of supported types
+
+    Delimiters:
+      - Compact formatting: separators=(',', ':') with zero whitespace padding.
+
+    Standards Scope & Limitations:
+      - This function implements deterministic canonical serialization for the
+        system's defined metadata schema. It does NOT claim full RFC 8785 (JCS)
+        coverage because it does not implement IEEE 754 64-bit floating point
+        ECMA-262 scientific notation normalization or negative zero handling (-0).
+        Floating-point numbers, NaN, and Infinity are not permitted in release metadata.
     """
     return json.dumps(
         data,

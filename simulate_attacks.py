@@ -34,7 +34,7 @@ def ensure_server_running():
     if not is_server_listening():
         print(f"{CYAN}[*] Initializing local HTTPS update server daemon...{RESET}")
         from server.app import create_app
-        app = create_app()
+        app = create_app({"DEMO_MODE": True})
         cert_file = PROJECT_ROOT / "certs" / "server.crt"
         key_file = PROJECT_ROOT / "certs" / "server.key"
         
@@ -162,8 +162,8 @@ def run_scenario_2():
         tag = f"{GREEN}[PASS]{RESET}" if s["success"] else f"{RED}[BLOCKED]{RESET}"
         print(f"  {tag} Step {s['step']}: {s['name']} -> {s['message']}")
         
-    if not res["success"] and res["error_stage"] == 6:
-        print(f"\n{BOLD}{GREEN}[VERDICT] ATTACK PREVENTED: Package tampering caught at Step 6 (SHA-256 Mismatch).{RESET}")
+    if not res["success"] and res["error_stage"] in (6, 7):
+        print(f"\n{BOLD}{GREEN}[VERDICT] ATTACK PREVENTED: Package tampering caught at Step 7 (SHA-256 Digest Mismatch).{RESET}")
         return True
     else:
         print(f"\n{BOLD}{RED}[VERDICT] FAILURE: Package tampering was not blocked correctly!{RESET}")

@@ -1,13 +1,12 @@
 {
   "name": "DemoApp",
   "software_id": "demoapp",
-  "version": "1.1.0",
-  "release_sequence": 2,
-  "build_date": "2026-11-10T12:00:00Z",
+  "version": "1.0.0",
+  "release_sequence": 1,
+  "build_date": "2026-11-01T00:00:00Z",
   "features": [
     "Baseline diagnostic engine",
-    "Basic local logging",
-    "Network performance optimizer",
-    "Enhanced cryptographic telemetry"
+    "Basic local logging"
   ]
 }
+

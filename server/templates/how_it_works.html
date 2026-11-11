@@ -1,0 +1,806 @@
+{% extends "base.html" %}
+
+{% block title %}How It Works - Secure Software Update Architecture{% endblock %}
+
+{% block content %}
+<div class="subnav-sticky">
+  <a href="#sec-architecture" class="subnav-link active">1. System Architecture</a>
+  <a href="#sec-cryptography" class="subnav-link">2. Cryptography Explained</a>
+  <a href="#sec-lifecycle" class="subnav-link">3. Complete Update Lifecycle</a>
+  <a href="#sec-attacks" class="subnav-link">4. Attack Simulations</a>
+  <a href="#sec-trust" class="subnav-link">5. Trust & Key Management</a>
+  <a href="#sec-limitations" class="subnav-link">6. Security Limitations</a>
+</div>
+
+<!-- SECTION 1: SYSTEM ARCHITECTURE -->
+<section id="sec-architecture" style="margin-bottom: 3.5rem; scroll-margin-top: 130px;">
+  <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+    <div>
+      <h2 style="font-size: 1.6rem; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 0.5rem;">
+        <span style="color: var(--accent-cyan);">1.</span> System Architecture
+      </h2>
+      <p style="color: var(--text-muted); margin-top: 0.25rem;">
+        Defense-in-depth pipeline separating build, distribution, verification, and staging environments.
+      </p>
+    </div>
+    <span class="badge badge-info" style="font-size: 0.8rem; padding: 0.4rem 0.8rem;">Interactive Diagram</span>
+  </div>
+
+  <div class="card" style="margin-bottom: 1.5rem; overflow-x: auto;">
+    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+      <i class="fas fa-hand-pointer" style="color: var(--accent-cyan); margin-right: 0.3rem;"></i>
+      <strong>Click any component node</strong> to inspect its security role, cryptographic primitives, failure modes, and code implementation.
+    </p>
+
+    <!-- Interactive SVG Architecture Diagram -->
+    <div style="width: 100%; min-width: 950px; text-align: center;">
+      <svg id="architecture-svg" viewBox="0 0 1000 420" style="width: 100%; height: auto; max-height: 440px;" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="gradPublisher" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#0369a1" />
+            <stop offset="100%" stop-color="#0284c7" />
+          </linearGradient>
+          <linearGradient id="gradServer" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#1e293b" />
+            <stop offset="100%" stop-color="#334155" />
+          </linearGradient>
+          <linearGradient id="gradClient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#064e3b" />
+            <stop offset="100%" stop-color="#047857" />
+          </linearGradient>
+          <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="4" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+          <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#38bdf8" />
+          </marker>
+          <marker id="arrowhead-green" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#10b981" />
+          </marker>
+        </defs>
+
+        <!-- Background zones -->
+        <rect x="20" y="20" width="460" height="380" rx="12" fill="#0b111e" stroke="#1e293b" stroke-dasharray="4" />
+        <text x="35" y="45" fill="#64748b" font-size="12" font-weight="700" letter-spacing="1">TRUSTED PUBLISHER ENVIRONMENT (OFFLINE / BUILD)</text>
+
+        <rect x="510" y="20" width="180" height="380" rx="12" fill="#0d1424" stroke="#1e293b" stroke-dasharray="4" />
+        <text x="525" y="45" fill="#64748b" font-size="12" font-weight="700" letter-spacing="1">DISTRIBUTION</text>
+
+        <rect x="720" y="20" width="260" height="380" rx="12" fill="#0b1516" stroke="#134e4a" stroke-dasharray="4" />
+        <text x="735" y="45" fill="#10b981" font-size="12" font-weight="700" letter-spacing="1">CLIENT DEVICE (UNTRUSTED ENV)</text>
+
+        <!-- Connecting Flow Lines -->
+        <path d="M 170 170 L 230 110" fill="none" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrowhead)" class="svg-flow-path" />
+        <path d="M 170 190 L 230 250" fill="none" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrowhead)" class="svg-flow-path" />
+        <path d="M 370 110 L 400 160" fill="none" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrowhead)" />
+        <path d="M 370 250 L 400 180" fill="none" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrowhead)" />
+        <path d="M 470 180 L 530 180" fill="none" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrowhead)" class="svg-flow-path" />
+        <path d="M 670 180 L 740 140" fill="none" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrowhead)" class="svg-flow-path" />
+        <path d="M 850 210 L 850 260" fill="none" stroke="#10b981" stroke-width="2" marker-end="url(#arrowhead-green)" />
+
+        <!-- Node 1: Admin / Publisher -->
+        <g class="svg-interactive-node active-node" id="node-publisher" data-component="publisher" transform="translate(40, 140)">
+          <rect width="130" height="80" rx="8" fill="url(#gradPublisher)" stroke="#38bdf8" stroke-width="2" />
+          <text x="65" y="35" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Administrator</text>
+          <text x="65" y="55" text-anchor="middle" fill="#bae6fd" font-size="11">Release Publisher</text>
+        </g>
+
+        <!-- Node 2: Package Processing -->
+        <g class="svg-interactive-node" id="node-processing" data-component="processing" transform="translate(230, 75)">
+          <rect width="140" height="70" rx="8" fill="#131a29" stroke="#0284c7" stroke-width="1.5" />
+          <text x="70" y="32" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">Package Processor</text>
+          <text x="70" y="50" text-anchor="middle" fill="#94a3b8" font-size="10">ZIP Canonical Layout</text>
+        </g>
+
+        <!-- Node 3: SHA-256 Hashing -->
+        <g class="svg-interactive-node" id="node-sha256" data-component="sha256" transform="translate(230, 220)">
+          <rect width="140" height="70" rx="8" fill="#131a29" stroke="#06b6d4" stroke-width="1.5" />
+          <text x="70" y="32" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">SHA-256 Hashing</text>
+          <text x="70" y="50" text-anchor="middle" fill="#67e8f9" font-size="10">256-bit Binary Digest</text>
+        </g>
+
+        <!-- Node 4: Ed25519 Signing Engine -->
+        <g class="svg-interactive-node" id="node-ed25519" data-component="ed25519" transform="translate(400, 140)">
+          <rect width="70" height="80" rx="8" fill="#131a29" stroke="#f59e0b" stroke-width="1.5" />
+          <text x="35" y="35" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Ed25519</text>
+          <text x="35" y="55" text-anchor="middle" fill="#fde68a" font-size="9">Private Key</text>
+        </g>
+
+        <!-- Node 5: HTTPS Update Server -->
+        <g class="svg-interactive-node" id="node-server" data-component="server" transform="translate(530, 140)">
+          <rect width="140" height="80" rx="8" fill="url(#gradServer)" stroke="#0284c7" stroke-width="1.5" />
+          <text x="70" y="35" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">HTTPS Server</text>
+          <text x="70" y="55" text-anchor="middle" fill="#94a3b8" font-size="10">Flask + TLS + SQLite</text>
+        </g>
+
+        <!-- Node 6: Client Verification Engine -->
+        <g class="svg-interactive-node" id="node-verifier" data-component="verifier" transform="translate(740, 100)">
+          <rect width="220" height="110" rx="8" fill="url(#gradClient)" stroke="#10b981" stroke-width="2" />
+          <text x="110" y="35" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">Client Verifier</text>
+          <text x="110" y="55" text-anchor="middle" fill="#a7f3d0" font-size="11">11-Step Fail-Secure Engine</text>
+          <text x="110" y="75" text-anchor="middle" fill="#6ee7b7" font-size="10">Pinned Public Key Check</text>
+          <text x="110" y="93" text-anchor="middle" fill="#d1fae5" font-size="9">Hash Match + Rollback Guard</text>
+        </g>
+
+        <!-- Node 7: Safe Staged Installer -->
+        <g class="svg-interactive-node" id="node-installer" data-component="installer" transform="translate(740, 260)">
+          <rect width="220" height="90" rx="8" fill="#131a29" stroke="#10b981" stroke-width="1.5" />
+          <text x="110" y="35" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Staged Installer</text>
+          <text x="110" y="55" text-anchor="middle" fill="#94a3b8" font-size="10">Zip Slip Check & Extraction</text>
+          <text x="110" y="75" text-anchor="middle" fill="#a7f3d0" font-size="10">Atomic Commit & State Update</text>
+        </g>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Dynamic Component Details Panel -->
+  <div id="arch-details-panel" class="arch-details-box">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+      <h3 id="arch-title" style="color: #fff; font-size: 1.2rem; font-weight: 800; display: flex; align-items: center; gap: 0.5rem;">
+        <i class="fas fa-user-shield" style="color: var(--accent-cyan);"></i> Administrator / Publisher Environment
+      </h3>
+      <span id="arch-tag" class="badge badge-info">Build Environment</span>
+    </div>
+    <p id="arch-desc" style="color: var(--text-main); font-size: 0.95rem; margin-bottom: 1rem;">
+      The build authority packages the software artifact into a ZIP archive, assigns a monotonic sequence number and SemVer tag, computes the SHA-256 cryptographic digest, and signs the release metadata using an offline Ed25519 private key.
+    </p>
+
+    <div class="grid-3" style="margin-bottom: 0.5rem; gap: 1rem;">
+      <div style="background: rgba(0,0,0,0.25); padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color);">
+        <strong style="color: var(--accent-cyan); font-size: 0.8rem; text-transform: uppercase;">Cryptographic Role</strong>
+        <p id="arch-crypto" style="font-size: 0.85rem; color: #e2e8f0; margin-top: 0.25rem;">Ed25519 signing (RFC 8032) & SHA-256 digest computation (FIPS 180-4).</p>
+      </div>
+      <div style="background: rgba(0,0,0,0.25); padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color);">
+        <strong style="color: var(--success); font-size: 0.8rem; text-transform: uppercase;">Threat Mitigation</strong>
+        <p id="arch-threat" style="font-size: 0.85rem; color: #e2e8f0; margin-top: 0.25rem;">Unauthorized releases, rogue code injection, man-in-the-middle forging.</p>
+      </div>
+      <div style="background: rgba(0,0,0,0.25); padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color);">
+        <strong style="color: var(--warning); font-size: 0.8rem; text-transform: uppercase;">Code Implementation</strong>
+        <p id="arch-code" style="font-size: 0.85rem; color: #e2e8f0; margin-top: 0.25rem; font-family: monospace;">server/services/release_manager.py</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 2: CRYPTOGRAPHY EXPLAINED -->
+<section id="sec-cryptography" style="margin-bottom: 3.5rem; scroll-margin-top: 130px;">
+  <div style="margin-bottom: 1rem;">
+    <h2 style="font-size: 1.6rem; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 0.5rem;">
+      <span style="color: var(--accent-cyan);">2.</span> Cryptography Explained
+    </h2>
+    <p style="color: var(--text-muted); margin-top: 0.25rem;">
+      Interactive simulations demonstrating collision-resistant hashing and digital signatures.
+    </p>
+  </div>
+
+  <div class="card">
+    <div class="tab-group">
+      <button class="tab-btn active" onclick="switchCryptoTab('tab-sha256')"><i class="fas fa-fingerprint"></i> SHA-256 Hashing & Avalanche Effect</button>
+      <button class="tab-btn" onclick="switchCryptoTab('tab-ed25519')"><i class="fas fa-key"></i> Ed25519 Digital Signatures</button>
+      <button class="tab-btn" onclick="switchCryptoTab('tab-comparison')"><i class="fas fa-balance-scale"></i> Integrity vs Authenticity</button>
+    </div>
+
+    <!-- TAB 1: SHA-256 -->
+    <div id="tab-sha256" class="tab-pane active">
+      <div style="margin-bottom: 1rem;">
+        <h4 style="color: #fff; font-size: 1.1rem; font-weight: 700;">SHA-256 (Secure Hash Algorithm 256-Bit)</h4>
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 0.25rem;">
+          A cryptographic hash function mapping arbitrary input data into a fixed 256-bit (64 hex characters) digest.
+          It provides <strong>pre-image resistance</strong> (one-way), <strong>second pre-image resistance</strong>, and <strong>collision resistance</strong>.
+        </p>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" style="display: flex; justify-content: space-between;">
+          <span>Original Binary Payload String:</span>
+          <span style="color: var(--accent-cyan); font-size: 0.8rem;">Live WebCrypto API SHA-256 Computation</span>
+        </label>
+        <textarea id="sha-input-orig" class="form-control" rows="2" style="font-family: monospace; font-size: 0.85rem;" oninput="recalcShaDemo()">DemoApp release payload: v1.1.0-stable build 20261111</textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>Simulated Modified Payload (Tampered Package):</span>
+          <button class="btn btn-warning" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;" onclick="tamperShaPayload()">
+            <i class="fas fa-bug"></i> Flip Single Character
+          </button>
+        </label>
+        <textarea id="sha-input-tamper" class="form-control" rows="2" style="font-family: monospace; font-size: 0.85rem;" oninput="recalcShaDemo()">DemoApp release payload: v1.1.0-stable build 20261111 [MODIFIED]</textarea>
+      </div>
+
+      <!-- Avalanche Diff Container -->
+      <div class="avalanche-container">
+        <div class="avalanche-box">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <strong style="color: var(--success); font-size: 0.85rem;"><i class="fas fa-check-circle"></i> Expected Release Digest:</strong>
+            <span class="badge badge-success">Official Digest</span>
+          </div>
+          <div id="sha-digest-orig" style="font-family: monospace; font-size: 0.8rem; word-break: break-all; color: #bae6fd; background: rgba(0,0,0,0.4); padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color);">
+            Calculating...
+          </div>
+        </div>
+
+        <div class="avalanche-box">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <strong style="color: var(--danger); font-size: 0.85rem;"><i class="fas fa-radiation"></i> Computed Download Digest:</strong>
+            <span id="sha-match-badge" class="badge badge-danger">Mismatch Detected</span>
+          </div>
+          <div id="sha-digest-tamper" style="font-family: monospace; font-size: 0.8rem; word-break: break-all; color: #fca5a5; background: rgba(0,0,0,0.4); padding: 0.6rem; border-radius: 4px; border: 1px solid var(--border-color);">
+            Calculating...
+          </div>
+        </div>
+      </div>
+
+      <div id="sha-verdict-box" style="margin-top: 1rem; padding: 0.85rem; border-radius: 6px; background: rgba(239, 68, 68, 0.15); border: 1px solid var(--danger);">
+        <strong style="color: #fca5a5; display: flex; align-items: center; gap: 0.4rem;">
+          <i class="fas fa-shield-alt"></i> Step 7 Defense Verdict: REJECTED BEFORE EXECUTION
+        </strong>
+        <p style="color: var(--text-main); font-size: 0.85rem; margin-top: 0.25rem;">
+          The Avalanche Effect ensures that changing even 1 bit changes roughly 50% of the resulting digest bits.
+          The client detects this digest mismatch at <strong>Step 7</strong> and deletes the downloaded archive without extracting a single byte.
+        </p>
+      </div>
+    </div>
+
+    <!-- TAB 2: ED25519 -->
+    <div id="tab-ed25519" class="tab-pane">
+      <div style="margin-bottom: 1rem;">
+        <h4 style="color: #fff; font-size: 1.1rem; font-weight: 700;">Ed25519 Asymmetric Digital Signatures (RFC 8032)</h4>
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 0.25rem;">
+          Ed25519 uses the twisted Edwards curve Curve25519 with SHA-512. It provides 128-bit security level with collision resistance, resistance to side-channel attacks, and ultra-compact 64-byte signatures.
+        </p>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Canonical Release Metadata JSON Payload:</label>
+        <div style="background: var(--terminal-bg); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.75rem; font-family: monospace; font-size: 0.85rem; color: #38bdf8;">
+{
+  "expiration": "2026-12-01T00:00:00+00:00",
+  "min_client_version": "1.0.0",
+  "package_hash": "b4cc50772e707fbbbf607d107642f5247a04ea0adc951021fada55847c4d013e",
+  "package_name": "demoapp-1.1.0.zip",
+  "sequence": 2,
+  "software_id": "demoapp",
+  "version": "1.1.0"
+}
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-top: 1rem;">
+        <label class="form-label">Select Simulation Test Case:</label>
+        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+          <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+            <input type="radio" name="ed25519-case" value="valid" checked onchange="runEd25519Demo()">
+            <span><strong>Valid Publisher Key:</strong> Legitimate signature created with offline private key</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+            <input type="radio" name="ed25519-case" value="rogue" onchange="runEd25519Demo()">
+            <span style="color: #fca5a5;"><strong>Rogue Attacker Key:</strong> Attacker generates their own keypair</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+            <input type="radio" name="ed25519-case" value="tampered" onchange="runEd25519Demo()">
+            <span style="color: #fde68a;"><strong>Tampered Metadata:</strong> Valid signature, but metadata modified</span>
+          </label>
+        </div>
+      </div>
+
+      <div id="ed25519-result-box" style="margin-top: 1rem; padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color); background: #0b111e;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <strong id="ed25519-status-title" style="color: var(--success); font-size: 1rem;">
+            <i class="fas fa-check-circle"></i> Ed25519 Verification: SUCCESS
+          </strong>
+          <span id="ed25519-status-badge" class="badge badge-success">Cryptographically Valid</span>
+        </div>
+        <p id="ed25519-status-desc" style="color: var(--text-main); font-size: 0.9rem;">
+          Signature matches canonical bytes evaluated against the client's pinned public key (keys/publisher_public.pem). Metadata authenticity guaranteed.
+        </p>
+        <div style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 4px; padding: 0.5rem; margin-top: 0.5rem; font-family: monospace; font-size: 0.75rem; color: var(--text-muted);">
+          CryptoPrimitive: Verify(PublicKey[32 bytes], CanonicalBytes[232 bytes], Signature[64 bytes]) -> True
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: INTEGRITY VS AUTHENTICITY -->
+    <div id="tab-comparison" class="tab-pane">
+      <div style="margin-bottom: 1rem;">
+        <h4 style="color: #fff; font-size: 1.1rem; font-weight: 700;">Integrity Verification vs. Publisher Authenticity</h4>
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 0.25rem;">
+          Why neither a hash alone nor a signature alone is sufficient for secure software distribution.
+        </p>
+      </div>
+
+      <table class="table-comparison">
+        <thead>
+          <tr>
+            <th>Security Dimension</th>
+            <th>SHA-256 Hashing Only</th>
+            <th>Ed25519 Signature Only</th>
+            <th>Combined Two-Tier Architecture (Our System)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>What It Verifies</strong></td>
+            <td>File integrity against accidental bit-rot or tampering against a reference hash.</td>
+            <td>Publisher authorship and non-repudiation of the metadata manifest.</td>
+            <td>Both origin authenticity of the publisher AND exact binary integrity of the package.</td>
+          </tr>
+          <tr>
+            <td><strong>Adversary Vector</strong></td>
+            <td><span style="color: var(--danger);"><i class="fas fa-times-circle"></i> Vulnerable:</span> Attacker modifies file AND recalculates reference hash in unsigned manifest.</td>
+            <td><span style="color: var(--warning);"><i class="fas fa-exclamation-triangle"></i> Inefficient:</span> Signing a multi-gigabyte binary directly requires streaming crypto or complex chunking.</td>
+            <td><span style="color: var(--success);"><i class="fas fa-check-circle"></i> Secure:</span> Ed25519 signs the canonical manifest containing the SHA-256 hash. Modifying package breaks hash; modifying manifest breaks signature.</td>
+          </tr>
+          <tr>
+            <td><strong>Key Management</strong></td>
+            <td>No cryptographic keys required.</td>
+            <td>Asymmetric keypair (Public / Private).</td>
+            <td>Publisher keeps private key offline; client pins public key; server hosts signed bundle.</td>
+          </tr>
+          <tr>
+            <td><strong>Server Compromise</strong></td>
+            <td><span style="color: var(--danger);"><i class="fas fa-times-circle"></i> Breached:</span> Rogue server can push any malicious package.</td>
+            <td><span style="color: var(--success);"><i class="fas fa-check-circle"></i> Protected:</span> Rogue server cannot forge valid signatures.</td>
+            <td><span style="color: var(--success);"><i class="fas fa-check-circle"></i> Fail-Secure:</span> Even if the update server is fully compromised, clients reject forged updates at Step 2 or 7.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 3: COMPLETE UPDATE LIFECYCLE -->
+<section id="sec-lifecycle" style="margin-bottom: 3.5rem; scroll-margin-top: 130px;">
+  <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+    <div>
+      <h2 style="font-size: 1.6rem; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 0.5rem;">
+        <span style="color: var(--accent-cyan);">3.</span> Complete Update Lifecycle
+      </h2>
+      <p style="color: var(--text-muted); margin-top: 0.25rem;">
+        Interactive step-by-step player walking through the client's actual 11-step fail-secure verification engine.
+      </p>
+    </div>
+    <span class="badge badge-success" style="font-size: 0.8rem; padding: 0.4rem 0.8rem;">11 Verified Steps</span>
+  </div>
+
+  <div class="card">
+    <!-- Player Controls Header -->
+    <div class="player-controls">
+      <div class="player-btn-group">
+        <button id="btn-play-pause" class="player-btn" title="Play / Pause" onclick="togglePlayPause()">
+          <i id="play-icon" class="fas fa-play"></i>
+        </button>
+        <button class="player-btn" title="Previous Step" onclick="stepPrev()">
+          <i class="fas fa-step-backward"></i>
+        </button>
+        <button class="player-btn" title="Next Step" onclick="stepNext()">
+          <i class="fas fa-step-forward"></i>
+        </button>
+        <button class="player-btn" title="Restart" onclick="stepRestart()">
+          <i class="fas fa-redo"></i>
+        </button>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <span style="font-size: 0.85rem; color: var(--text-muted);">Speed:</span>
+        <span id="speed-05" class="speed-badge" onclick="setSpeed(0.5)">0.5x</span>
+        <span id="speed-10" class="speed-badge active" onclick="setSpeed(1.0)">1.0x</span>
+        <span id="speed-20" class="speed-badge" onclick="setSpeed(2.0)">2.0x</span>
+      </div>
+
+      <div style="font-size: 0.85rem; font-weight: 700; color: #fff;">
+        <span id="player-step-counter" style="color: var(--accent-cyan);">Step 1</span> / 11
+      </div>
+    </div>
+
+    <!-- 11 Steps Progress Track -->
+    <div class="lifecycle-track">
+      <div id="track-step-1" class="lifecycle-step-node active" onclick="jumpToStep(1)">
+        <div class="lifecycle-step-num">STEP 1</div>
+        <div style="font-size: 0.75rem; font-weight: 600; color: #fff; margin-top: 2px;">Metadata</div>
+      </div>
+      <div id="track-step-2" class="lifecycle-step-node" onclick="jumpToStep(2)">
+        <div class="lifecycle-step-num">STEP 2</div>
+        <div style="font-size: 0.75rem; font-weight: 600; color: #fff; margin-top: 2px;">Ed25519</div>
+      </div>
+      <div id="track-step-3" class="lifecycle-step-node" onclick="jumpToStep(3)">
+        <div class="lifecycle-step-num">STEP 3</div>
+        <div style="font-size: 0.75rem; font-weight: 600; color: #fff; margin-top: 2px;">Freshness</div>
+      </div>
+      <div id="track-step-4" class="lifecycle-step-node" onclick="jumpToStep(4)">
+        <div class="lifecycle-step-num">STEP 4</div>
+        <div style="font-size: 0.75rem; font-weight: 600; color: #fff; margin-top: 2px;">Rollback</div>
+      </div>
+      <div id="track-step-5" class="lifecycle-step-node" onclick="jumpToStep(5)">
+        <div class="lifecycle-step-num">STEP 5</div>
+        <div style="font-size: 0.75rem; font-weight: 600; color: #fff; margin-top: 2px;">Download</div>
+      </div>
+      <div id="track-step-6" class="lifecycle-step-node" onclick="jumpToStep(6)">
+        <div class="lifecycle-step-num">STEP 6</div>
+        <div style="font-size: 0.75rem; font-weight: 600; color: #fff; margin-top: 2px;">Calc Hash</div>
+      </div>
+      <div id="track-step-7" class="lifecycle-step-node" onclick="jumpToStep(7)">
+        <div class="lifecycle-step-num">STEP 7</div>
+        <div style="font-size: 0.75rem; font-weight: 600; color: #fff; margin-top: 2px;">Hash Match</div>
+      </div>
+      <div id="track-step-8" class="lifecycle-step-node" onclick="jumpToStep(8)">
+        <div class="lifecycle-step-num">STEP 8</div>
+        <div style="font-size: 0.75rem; font-weight: 600; color: #fff; margin-top: 2px;">Zip Slip</div>
+      </div>
+      <div id="track-step-9" class="lifecycle-step-node" onclick="jumpToStep(9)">
+        <div class="lifecycle-step-num">STEP 9</div>
+        <div style="font-size: 0.75rem; font-weight: 600; color: #fff; margin-top: 2px;">Staging</div>
+      </div>
+      <div id="track-step-10" class="lifecycle-step-node" onclick="jumpToStep(10)">
+        <div class="lifecycle-step-num">STEP 10</div>
+        <div style="font-size: 0.75rem; font-weight: 600; color: #fff; margin-top: 2px;">Commit State</div>
+      </div>
+      <div id="track-step-11" class="lifecycle-step-node" onclick="jumpToStep(11)">
+        <div class="lifecycle-step-num">STEP 11</div>
+        <div style="font-size: 0.75rem; font-weight: 600; color: #fff; margin-top: 2px;">Telemetry</div>
+      </div>
+    </div>
+
+    <!-- Active Step Detail Card -->
+    <div id="lifecycle-detail-box" style="background: #0b111e; border: 1px solid var(--accent-cyan); border-radius: 8px; padding: 1.5rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+        <h3 id="step-title" style="color: #fff; font-size: 1.15rem; font-weight: 800;">
+          Step 1: Retrieve Signed Release Metadata
+        </h3>
+        <span id="step-phase-badge" class="badge badge-info">Phase: Discovery</span>
+      </div>
+
+      <div class="grid-2" style="margin-bottom: 1rem; gap: 1rem;">
+        <div>
+          <strong style="color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase;">Client Operation</strong>
+          <p id="step-operation" style="color: var(--text-main); font-size: 0.9rem; margin-top: 0.25rem;">
+            Requests latest release metadata bundle from HTTPS update server (`/api/updates/check`). Parses JSON response containing release attributes and signature.
+          </p>
+        </div>
+        <div>
+          <strong style="color: var(--accent-cyan); font-size: 0.8rem; text-transform: uppercase;">Cryptographic / Security Check</strong>
+          <p id="step-security" style="color: var(--text-main); font-size: 0.9rem; margin-top: 0.25rem;">
+            TLS certificate validation over HTTPS protects initial transit channel. Verifies payload structure conforms to required metadata schema.
+          </p>
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-bottom: 0.5rem; gap: 1rem;">
+        <div style="background: rgba(239, 68, 68, 0.08); padding: 0.75rem; border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.2);">
+          <strong style="color: #fca5a5; font-size: 0.8rem; text-transform: uppercase;">Threat Mitigated</strong>
+          <p id="step-threat" style="font-size: 0.85rem; color: #e2e8f0; margin-top: 0.25rem;">
+            Network interception, unparseable payload injection, man-in-the-middle dropping headers.
+          </p>
+        </div>
+        <div style="background: rgba(245, 158, 11, 0.08); padding: 0.75rem; border-radius: 6px; border: 1px solid rgba(245, 158, 11, 0.2);">
+          <strong style="color: #fde68a; font-size: 0.8rem; text-transform: uppercase;">Fail-Secure Behavior</strong>
+          <p id="step-failsecure" style="font-size: 0.85rem; color: #e2e8f0; margin-top: 0.25rem;">
+            Aborts with exit code 1; no temporary files written; installed state remains untouched.
+          </p>
+        </div>
+      </div>
+
+      <div style="font-family: monospace; font-size: 0.75rem; color: var(--text-muted); margin-top: 0.75rem;">
+        <i class="fas fa-code"></i> Source: <span id="step-code">client/updater.py:retrieve_metadata()</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 4: ATTACK SIMULATIONS -->
+<section id="sec-attacks" style="margin-bottom: 3.5rem; scroll-margin-top: 130px;">
+  <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+    <div>
+      <h2 style="font-size: 1.6rem; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 0.5rem;">
+        <span style="color: var(--accent-cyan);">4.</span> Attack Simulations
+      </h2>
+      <p style="color: var(--text-muted); margin-top: 0.25rem;">
+        Interactive test lab executing actual attack scenarios against the client verification engine.
+      </p>
+    </div>
+    <span class="badge badge-warning" style="font-size: 0.8rem; padding: 0.4rem 0.8rem;">6 Real Scenarios</span>
+  </div>
+
+  <div class="attack-grid">
+    <!-- Scenario 1 -->
+    <div class="attack-card">
+      <div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <h4 style="color: #fff; font-size: 1rem; font-weight: 700;">Scenario 1: Genuine Release</h4>
+          <span class="badge badge-success">Baseline</span>
+        </div>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem;">
+          Genuine v1.1.0 update signed with official Ed25519 publisher key. SHA-256 hash strictly matches.
+        </p>
+        <div style="font-size: 0.8rem; background: rgba(0,0,0,0.25); padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); margin-bottom: 0.75rem;">
+          <strong>Target Outcome:</strong> All 11 steps pass; app cleanly upgraded to v1.1.0.
+        </div>
+      </div>
+      <div>
+        <button class="btn btn-primary" style="width: 100%; font-size: 0.85rem; padding: 0.4rem;" onclick="runBackendScenario(1, 'term-1', 'btn-1')" id="btn-1">
+          <i class="fas fa-play"></i> Execute Real Test (Scenario 1)
+        </button>
+        <div id="term-1" class="attack-terminal" style="display: none;"></div>
+      </div>
+    </div>
+
+    <!-- Scenario 2 -->
+    <div class="attack-card">
+      <div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <h4 style="color: #fff; font-size: 1rem; font-weight: 700;">Scenario 2: Package Tampering</h4>
+          <span class="badge badge-danger">Integrity Attack</span>
+        </div>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem;">
+          Adversary intercepts network package and injects malicious bytes into the ZIP archive.
+        </p>
+        <div style="font-size: 0.8rem; background: rgba(0,0,0,0.25); padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); margin-bottom: 0.75rem;">
+          <strong style="color: var(--danger);">Blocked At:</strong> Step 7 (Verify Package Hash Match). Package purged before extraction.
+        </div>
+      </div>
+      <div>
+        <button class="btn btn-warning" style="width: 100%; font-size: 0.85rem; padding: 0.4rem;" onclick="runBackendScenario(2, 'term-2', 'btn-2')" id="btn-2">
+          <i class="fas fa-bug"></i> Execute Real Attack (Scenario 2)
+        </button>
+        <div id="term-2" class="attack-terminal" style="display: none;"></div>
+      </div>
+    </div>
+
+    <!-- Scenario 3 -->
+    <div class="attack-card">
+      <div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <h4 style="color: #fff; font-size: 1rem; font-weight: 700;">Scenario 3: Rogue Publisher</h4>
+          <span class="badge badge-danger">Authenticity Attack</span>
+        </div>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem;">
+          Attacker generates their own Ed25519 keypair and signs a malicious release metadata payload.
+        </p>
+        <div style="font-size: 0.8rem; background: rgba(0,0,0,0.25); padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); margin-bottom: 0.75rem;">
+          <strong style="color: var(--danger);">Blocked At:</strong> Step 2 (Ed25519 Digital Signature). Client rejects untrusted key.
+        </div>
+      </div>
+      <div>
+        <button class="btn btn-warning" style="width: 100%; font-size: 0.85rem; padding: 0.4rem;" onclick="runBackendScenario(3, 'term-3', 'btn-3')" id="btn-3">
+          <i class="fas fa-key"></i> Execute Real Attack (Scenario 3)
+        </button>
+        <div id="term-3" class="attack-terminal" style="display: none;"></div>
+      </div>
+    </div>
+
+    <!-- Scenario 4 -->
+    <div class="attack-card">
+      <div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <h4 style="color: #fff; font-size: 1rem; font-weight: 700;">Scenario 4: Rollback / Replay</h4>
+          <span class="badge badge-danger">Replay Attack</span>
+        </div>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem;">
+          Attacker intercepts valid old v1.0.0 release and replays it to a client already running v1.1.0.
+        </p>
+        <div style="font-size: 0.8rem; background: rgba(0,0,0,0.25); padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); margin-bottom: 0.75rem;">
+          <strong style="color: var(--danger);">Blocked At:</strong> Step 4 (Version & Rollback Validation). Sequence & SemVer check fails.
+        </div>
+      </div>
+      <div>
+        <button class="btn btn-warning" style="width: 100%; font-size: 0.85rem; padding: 0.4rem;" onclick="runBackendScenario(4, 'term-4', 'btn-4')" id="btn-4">
+          <i class="fas fa-history"></i> Execute Real Attack (Scenario 4)
+        </button>
+        <div id="term-4" class="attack-terminal" style="display: none;"></div>
+      </div>
+    </div>
+
+    <!-- Scenario 5 -->
+    <div class="attack-card">
+      <div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <h4 style="color: #fff; font-size: 1rem; font-weight: 700;">Scenario 5: Metadata Tampering</h4>
+          <span class="badge badge-danger">Integrity Attack</span>
+        </div>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem;">
+          Attacker modifies the package hash in release.json to match a malicious file, keeping old signature.
+        </p>
+        <div style="font-size: 0.8rem; background: rgba(0,0,0,0.25); padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); margin-bottom: 0.75rem;">
+          <strong style="color: var(--danger);">Blocked At:</strong> Step 2 (Signature Verification). Signature over altered JSON fails.
+        </div>
+      </div>
+      <div>
+        <button class="btn btn-warning" style="width: 100%; font-size: 0.85rem; padding: 0.4rem;" onclick="runBackendScenario(5, 'term-5', 'btn-5')" id="btn-5">
+          <i class="fas fa-file-signature"></i> Execute Real Attack (Scenario 5)
+        </button>
+        <div id="term-5" class="attack-terminal" style="display: none;"></div>
+      </div>
+    </div>
+
+    <!-- Scenario 6 -->
+    <div class="attack-card">
+      <div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <h4 style="color: #fff; font-size: 1rem; font-weight: 700;">Scenario 6: Expired Release</h4>
+          <span class="badge badge-danger">Freshness Attack</span>
+        </div>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem;">
+          Attacker supplies correctly signed release whose expiration timestamp is in the past.
+        </p>
+        <div style="font-size: 0.8rem; background: rgba(0,0,0,0.25); padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); margin-bottom: 0.75rem;">
+          <strong style="color: var(--danger);">Blocked At:</strong> Step 3 (Metadata Freshness Check). Expired timestamp rejected.
+        </div>
+      </div>
+      <div>
+        <button class="btn btn-warning" style="width: 100%; font-size: 0.85rem; padding: 0.4rem;" onclick="runBackendScenario(6, 'term-6', 'btn-6')" id="btn-6">
+          <i class="fas fa-clock"></i> Execute Real Attack (Scenario 6)
+        </button>
+        <div id="term-6" class="attack-terminal" style="display: none;"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 5: TRUST AND KEY MANAGEMENT -->
+<section id="sec-trust" style="margin-bottom: 3.5rem; scroll-margin-top: 130px;">
+  <div style="margin-bottom: 1rem;">
+    <h2 style="font-size: 1.6rem; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 0.5rem;">
+      <span style="color: var(--accent-cyan);">5.</span> Trust & Key Management
+    </h2>
+    <p style="color: var(--text-muted); margin-top: 0.25rem;">
+      Cryptographic trust anchors, key provisioning, and transport vs payload security boundaries.
+    </p>
+  </div>
+
+  <div class="grid-2">
+    <!-- Key Roles -->
+    <div class="card">
+      <h4 style="color: #fff; font-size: 1.1rem; font-weight: 700; margin-bottom: 1rem;">
+        <i class="fas fa-key" style="color: var(--accent-cyan);"></i> Cryptographic Trust Anchors
+      </h4>
+
+      <div style="margin-bottom: 1rem; background: #0b111e; padding: 0.85rem; border-radius: 6px; border: 1px solid var(--border-color);">
+        <strong style="color: var(--warning); font-size: 0.9rem;">1. Publisher Private Key (`keys/publisher_private.pem`)</strong>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
+          256-bit Ed25519 seed held exclusively by the release authority. Never exposed to web server, CDN, or client. Signs canonical metadata manifests.
+        </p>
+      </div>
+
+      <div style="margin-bottom: 1rem; background: #0b111e; padding: 0.85rem; border-radius: 6px; border: 1px solid var(--border-color);">
+        <strong style="color: var(--success); font-size: 0.9rem;">2. Client Pinned Public Key (`keys/publisher_public.pem`)</strong>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
+          32-byte public key embedded directly within the client software distribution. Serves as the immutable root of trust for verifying all incoming release signatures.
+        </p>
+      </div>
+
+      <div style="background: #0b111e; padding: 0.85rem; border-radius: 6px; border: 1px solid var(--border-color);">
+        <strong style="color: var(--accent-cyan); font-size: 0.9rem;">3. TLS Certificate & Authority (`certs/server.crt`, `certs/ca.crt`)</strong>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
+          X.509 certificate securing HTTPS transmission. Client authenticates the server domain against its trusted CA store before exchanging metadata or packages.
+        </p>
+      </div>
+    </div>
+
+    <!-- Transport vs Payload -->
+    <div class="card">
+      <h4 style="color: #fff; font-size: 1.1rem; font-weight: 700; margin-bottom: 1rem;">
+        <i class="fas fa-shield-alt" style="color: var(--success);"></i> Transport Security vs. Payload Authenticity
+      </h4>
+
+      <div style="margin-bottom: 1rem;">
+        <strong style="color: #bae6fd; font-size: 0.9rem;">Why HTTPS Alone Is Insufficient:</strong>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
+          TLS terminates at the edge. A compromised CDN, malicious proxy, rogue BGP route, or breached update server could serve forged files over valid TLS connections.
+        </p>
+      </div>
+
+      <div style="margin-bottom: 1rem;">
+        <strong style="color: #a7f3d0; font-size: 0.9rem;">End-to-End Release Authenticity:</strong>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
+          Ed25519 digital signatures bind the publisher's identity directly to the package digest. Even if updates are distributed over insecure mirrors or untrusted CDNs, the client cryptographically validates authenticity before execution.
+        </p>
+      </div>
+
+      <div style="background: rgba(2, 132, 199, 0.1); border: 1px solid var(--primary-glow); padding: 0.75rem; border-radius: 6px;">
+        <strong style="color: #fff; font-size: 0.85rem;">Key Rotation Strategy:</strong>
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem;">
+          In production systems (e.g. TUF), root keys sign intermediate targets keys. During key rotation, the publisher dual-signs releases with both old and new keys during a migration grace window.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 6: SECURITY LIMITATIONS AND THREAT MODEL -->
+<section id="sec-limitations" style="margin-bottom: 3.5rem; scroll-margin-top: 130px;">
+  <div style="margin-bottom: 1rem;">
+    <h2 style="font-size: 1.6rem; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 0.5rem;">
+      <span style="color: var(--accent-cyan);">6.</span> Security Limitations & Threat Model
+    </h2>
+    <p style="color: var(--text-muted); margin-top: 0.25rem;">
+      Rigorous disclosure of prototype boundaries, architectural assumptions, and production hardening requirements.
+    </p>
+  </div>
+
+  <div class="grid-2">
+    <div class="limitation-card critical">
+      <div class="limitation-header">
+        <span class="limitation-title"><i class="fas fa-skull-crossbones" style="color: var(--danger); margin-right: 0.4rem;"></i> Signing Key Compromise</span>
+        <span class="badge badge-danger">High Risk</span>
+      </div>
+      <p style="font-size: 0.85rem; color: var(--text-muted);">
+        If the publisher's Ed25519 private key is exfiltrated, an attacker can generate legitimate signatures for arbitrary malware.
+      </p>
+      <div style="font-size: 0.8rem; color: #bae6fd; margin-top: 0.5rem;">
+        <strong>Production Mitigation:</strong> Air-gapped HSMs (YubiHSM/KMS), multi-signature threshold schemes (TUF Root/Targets delegation), short-lived keys.
+      </div>
+    </div>
+
+    <div class="limitation-card critical">
+      <div class="limitation-header">
+        <span class="limitation-title"><i class="fas fa-user-ninja" style="color: var(--danger); margin-right: 0.4rem;"></i> Client Host OS / Root Compromise</span>
+        <span class="badge badge-danger">Out of Scope</span>
+      </div>
+      <p style="font-size: 0.85rem; color: var(--text-muted);">
+        If malware obtains root or administrative privileges on the client operating system, it can replace the pinned public key, tamper with client code, or edit installed binaries.
+      </p>
+      <div style="font-size: 0.8rem; color: #bae6fd; margin-top: 0.5rem;">
+        <strong>Production Mitigation:</strong> UEFI Secure Boot, TPM hardware attestation, OS kernel integrity policies (AppLocker/dm-verity).
+      </div>
+    </div>
+
+    <div class="limitation-card">
+      <div class="limitation-header">
+        <span class="limitation-title"><i class="fas fa-file-code" style="color: var(--warning); margin-right: 0.4rem;"></i> Local Rollback State Manipulation</span>
+        <span class="badge badge-warning">Medium Risk</span>
+      </div>
+      <p style="font-size: 0.85rem; color: var(--text-muted);">
+        The client currently stores version history in `demoapp/state.json` on unencrypted local disk. A local non-root process with write permissions could reset the sequence to 0.
+      </p>
+      <div style="font-size: 0.8rem; color: #bae6fd; margin-top: 0.5rem;">
+        <strong>Production Mitigation:</strong> Storing monotonic counters in TPM NVRAM or OS-protected credential registries.
+      </div>
+    </div>
+
+    <div class="limitation-card">
+      <div class="limitation-header">
+        <span class="limitation-title"><i class="fas fa-clock" style="color: var(--warning); margin-right: 0.4rem;"></i> System Clock Trust & NTP Spoofing</span>
+        <span class="badge badge-warning">Medium Risk</span>
+      </div>
+      <p style="font-size: 0.85rem; color: var(--text-muted);">
+        Release freshness verification relies on `datetime.now(timezone.utc)`. If the client system clock is set backwards via unauthenticated NTP, an expired release could be accepted.
+      </p>
+      <div style="font-size: 0.8rem; color: #bae6fd; margin-top: 0.5rem;">
+        <strong>Production Mitigation:</strong> Network Time Security (NTS / RFC 8915), consensus timestamps, or server-signed challenge nonces.
+      </div>
+    </div>
+
+    <div class="limitation-card">
+      <div class="limitation-header">
+        <span class="limitation-title"><i class="fas fa-power-off" style="color: var(--warning); margin-right: 0.4rem;"></i> Catastrophic Power Failure During Swap</span>
+        <span class="badge badge-warning">Low Risk</span>
+      </div>
+      <p style="font-size: 0.85rem; color: var(--text-muted);">
+        While the installer uses staging directories and preserves a `.backup` directory, an abrupt power cut during directory rename could leave files in an intermediate state.
+      </p>
+      <div style="font-size: 0.8rem; color: #bae6fd; margin-top: 0.5rem;">
+        <strong>Production Mitigation:</strong> A/B dual partition switching or atomic symlink swapping on modern filesystems.
+      </div>
+    </div>
+
+    <div class="limitation-card">
+      <div class="limitation-header">
+        <span class="limitation-title"><i class="fas fa-snowflake" style="color: var(--warning); margin-right: 0.4rem;"></i> Server Freeze Attacks</span>
+        <span class="badge badge-warning">Medium Risk</span>
+      </div>
+      <p style="font-size: 0.85rem; color: var(--text-muted);">
+        A compromised update server cannot forge updates, but it can withhold new security patches, keeping clients on their current version until expiration.
+      </p>
+      <div style="font-size: 0.8rem; color: #bae6fd; margin-top: 0.5rem;">
+        <strong>Production Mitigation:</strong> Short-lived timestamp metadata roles (TUF) and client-side heartbeat monitoring with out-of-band alerts.
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/how_it_works.js"></script>
+{% endblock %}
+

@@ -22,8 +22,8 @@ def setup():
     packages_dir = PROJECT_ROOT / "storage" / "packages"
     packages_dir.mkdir(parents=True, exist_ok=True)
     
-    # Package 1.0.0, 1.1.0, 1.2.0
-    for v in ["1.0.0", "1.1.0", "1.2.0"]:
+    # Package 1.0.0, 1.1.0, 1.2.0, 1.3.0, 1.4.0
+    for v in ["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0"]:
         src = versions_dir / v
         out_zip = packages_dir / f"demoapp-{v}.zip"
         build_zip(src, out_zip)

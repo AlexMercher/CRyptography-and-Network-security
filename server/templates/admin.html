@@ -6,20 +6,36 @@
 <!-- Top Stats Row -->
 <div class="grid-4">
   <div class="stat-card">
-    <span class="stat-label">Published Releases</span>
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <span class="stat-label">Published Releases</span>
+      <span class="badge badge-success" style="font-size: 0.65rem;">Active</span>
+    </div>
     <span class="stat-value" id="stat-releases">-</span>
+    <span style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.25rem;">Live from database</span>
   </div>
   <div class="stat-card">
-    <span class="stat-label">Active Clients</span>
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <span class="stat-label">Registered Clients</span>
+      <span class="badge badge-info" style="font-size: 0.65rem;">Verified</span>
+    </div>
     <span class="stat-value" id="stat-clients">-</span>
+    <span style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.25rem;">Connected devices</span>
   </div>
   <div class="stat-card">
-    <span class="stat-label">Security Incidents Blocked</span>
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <span class="stat-label">Attacks Blocked</span>
+      <span class="badge badge-danger" style="font-size: 0.65rem;">Fail-Secure</span>
+    </div>
     <span class="stat-value" id="stat-security" style="color: var(--danger);">-</span>
+    <span style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.25rem;">Integrity &amp; auth violations</span>
   </div>
   <div class="stat-card">
-    <span class="stat-label">Successful Installs</span>
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <span class="stat-label">Successful Installs</span>
+      <span class="badge badge-success" style="font-size: 0.65rem;">Telemetry</span>
+    </div>
     <span class="stat-value" id="stat-installs" style="color: var(--success);">-</span>
+    <span style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.25rem;">Verified activations</span>
   </div>
 </div>
 
@@ -36,7 +52,7 @@
   </div>
 </div>
 
-<!-- Main Split: Upload & Release on Left, Quick Publish & Releases on Right -->
+<!-- Main Split: Upload & Release on Left, Quick Publish on Right -->
 <div class="grid-2">
   <!-- Upload & Sign Form -->
   <div class="card">
@@ -130,7 +146,10 @@
 <!-- Published Releases Table -->
 <div class="card" style="margin-bottom: 2rem;">
   <div class="card-header">
-    <h2 class="card-title"><i class="fa-solid fa-box-archive"></i> Published Software Releases</h2>
+    <div>
+      <h2 class="card-title"><i class="fa-solid fa-box-archive"></i> Published Software Releases</h2>
+      <span style="font-size: 0.75rem; color: var(--text-muted);">Click any row to inspect complete cryptographic metadata, signatures &amp; revocation status.</span>
+    </div>
     <button class="btn btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" onclick="loadReleases()">
       <i class="fa-solid fa-arrows-rotate"></i> Refresh
     </button>
@@ -159,24 +178,168 @@
 
 <!-- Logs Split: Security Incidents & Update Activity -->
 <div class="grid-2">
+  <!-- Security Event Logs with Filter Toolbar -->
   <div class="card">
-    <div class="card-header">
+    <div class="card-header" style="flex-wrap: wrap; gap: 0.5rem;">
       <h2 class="card-title" style="color: var(--danger);"><i class="fa-solid fa-triangle-exclamation"></i> Security Event Logs</h2>
       <span class="badge badge-danger">Live Threat Feed</span>
     </div>
+    
+    <!-- Filter Controls -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 0.5rem; margin-bottom: 0.75rem;">
+      <div>
+        <select id="filter-sec-type" onchange="applyLogFilters()" style="font-size: 0.78rem; padding: 0.4rem;">
+          <option value="ALL">All Event Types</option>
+          <option value="PACKAGE_TAMPER_DETECTED">PACKAGE_TAMPER_DETECTED</option>
+          <option value="INVALID_SIGNATURE">INVALID_SIGNATURE</option>
+          <option value="ROLLBACK_ATTEMPT">ROLLBACK_ATTEMPT</option>
+          <option value="EXPIRED_OR_INVALID_METADATA">EXPIRED_METADATA</option>
+          <option value="UNAUTHORIZED_ACCESS">UNAUTHORIZED_ACCESS</option>
+          <option value="LOGIN_FAILED">LOGIN_FAILED</option>
+          <option value="MALICIOUS_PACKAGE_UPLOAD">MALICIOUS_UPLOAD</option>
+          <option value="RELEASE_REVOKED">RELEASE_REVOKED</option>
+          <option value="ZIP_SLIP_ATTEMPT">ZIP_SLIP_ATTEMPT</option>
+        </select>
+      </div>
+      <div>
+        <select id="filter-sec-result" onchange="applyLogFilters()" style="font-size: 0.78rem; padding: 0.4rem;">
+          <option value="ALL">All Outcomes</option>
+          <option value="BLOCKED">BLOCKED</option>
+          <option value="ALLOWED">ALLOWED</option>
+          <option value="ALERT">ALERT</option>
+        </select>
+      </div>
+      <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 0.4rem 0.65rem;" onclick="resetLogFilters()">
+        <i class="fa-solid fa-filter-circle-xmark"></i> Reset
+      </button>
+    </div>
+
     <div class="terminal" id="security-log-terminal">
       <div class="terminal-line info">[SYS] Monitoring security logs in real time...</div>
     </div>
   </div>
 
+  <!-- Client Activity Feed -->
   <div class="card">
     <div class="card-header">
       <h2 class="card-title" style="color: var(--accent-cyan);"><i class="fa-solid fa-list-check"></i> Client Update Activity</h2>
       <span class="badge badge-info">Audit Trail</span>
     </div>
-    <div class="terminal" id="activity-log-terminal">
+    <div class="terminal" id="activity-log-terminal" style="height: 325px;">
       <div class="terminal-line info">[SYS] Client check, download and installation logs...</div>
     </div>
+  </div>
+</div>
+
+<!-- Release Details Modal -->
+<div id="release-details-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+  <div class="card" style="width: 100%; max-width: 760px; max-height: 90vh; overflow-y: auto;">
+    <div class="card-header">
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <h2 class="card-title" id="modal-rel-title"><i class="fa-solid fa-circle-info"></i> Release Details</h2>
+        <span id="modal-rel-status-badge" class="badge"></span>
+      </div>
+      <button style="background: none; border: none; color: #fff; cursor: pointer; font-size: 1.3rem;" onclick="closeReleaseModal()">&times;</button>
+    </div>
+
+    <div class="grid-2" style="margin-bottom: 1rem; gap: 0.75rem;">
+      <div style="background: #0b111e; padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color);">
+        <div style="font-size: 0.75rem; color: var(--text-muted);">SOFTWARE IDENTIFIER</div>
+        <div style="font-weight: 700; color: #fff;" id="modal-rel-software">-</div>
+      </div>
+      <div style="background: #0b111e; padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color);">
+        <div style="font-size: 0.75rem; color: var(--text-muted);">VERSION &amp; SEQUENCE</div>
+        <div style="font-weight: 700; color: var(--accent-cyan);" id="modal-rel-version">-</div>
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-bottom: 1rem; gap: 0.75rem;">
+      <div style="background: #0b111e; padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color);">
+        <div style="font-size: 0.75rem; color: var(--text-muted);">PACKAGE FILENAME &amp; SIZE</div>
+        <div style="font-weight: 700; color: #fff;" id="modal-rel-filename">-</div>
+      </div>
+      <div style="background: #0b111e; padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color);">
+        <div style="font-size: 0.75rem; color: var(--text-muted);">VALIDITY WINDOW</div>
+        <div style="font-size: 0.85rem; color: #fff;" id="modal-rel-validity">-</div>
+      </div>
+    </div>
+
+    <!-- Revocation Details (Shown only if revoked) -->
+    <div id="modal-rel-revocation-box" style="display: none; background: rgba(239,68,68,0.1); border: 1px solid var(--danger); border-radius: 6px; padding: 0.75rem; margin-bottom: 1rem;">
+      <div style="font-size: 0.8rem; font-weight: 700; color: var(--danger); margin-bottom: 0.25rem;">
+        <i class="fa-solid fa-ban"></i> RELEASE REVOKED
+      </div>
+      <div style="font-size: 0.8rem; color: #fff;" id="modal-rel-revocation-details"></div>
+    </div>
+
+    <!-- SHA-256 Digest -->
+    <div class="form-group">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+        <label style="margin-bottom: 0;">SHA-256 Package Digest (Integrity Anchor)</label>
+        <button class="btn btn-secondary" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;" onclick="copyText('modal-rel-hash')">
+          <i class="fa-regular fa-copy"></i> Copy Hash
+        </button>
+      </div>
+      <div style="background: #0b111e; padding: 0.6rem; border-radius: 6px; border: 1px solid var(--border-color);">
+        <code id="modal-rel-hash" style="color: #38bdf8; word-break: break-all;"></code>
+      </div>
+    </div>
+
+    <!-- Ed25519 Digital Signature -->
+    <div class="form-group">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+        <label style="margin-bottom: 0;">Ed25519 Detached Digital Signature (Authenticity Anchor)</label>
+        <button class="btn btn-secondary" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;" onclick="copyText('modal-rel-sig')">
+          <i class="fa-regular fa-copy"></i> Copy Signature
+        </button>
+      </div>
+      <div style="background: #0b111e; padding: 0.6rem; border-radius: 6px; border: 1px solid var(--border-color);">
+        <code id="modal-rel-sig" style="color: var(--success); word-break: break-all;"></code>
+      </div>
+    </div>
+
+    <!-- Signed Canonical JSON Metadata -->
+    <div class="form-group">
+      <label>Canonical Signed Release Metadata (JSON)</label>
+      <pre id="modal-rel-json" style="background: #0b111e; border: 1px solid var(--border-color); border-radius: 6px; padding: 0.75rem; font-size: 0.78rem; color: #a5b4fc; max-height: 160px; overflow-y: auto;"></pre>
+    </div>
+
+    <!-- Modal Actions -->
+    <div style="display: flex; justify-content: space-between; gap: 0.75rem; margin-top: 1.25rem;">
+      <a id="modal-btn-download" href="#" class="btn btn-secondary" download>
+        <i class="fa-solid fa-download"></i> Download Package (.zip)
+      </a>
+      <div style="display: flex; gap: 0.5rem;">
+        <button id="modal-btn-revoke" class="btn btn-danger" onclick="promptRevokeFromModal()">
+          <i class="fa-solid fa-ban"></i> Revoke Release
+        </button>
+        <button class="btn btn-secondary" onclick="closeReleaseModal()">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Revoke Release Dialog Modal -->
+<div id="revoke-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 1050; align-items: center; justify-content: center;">
+  <div class="card" style="width: 100%; max-width: 460px;">
+    <div class="card-header">
+      <h2 class="card-title" style="color: var(--danger);"><i class="fa-solid fa-triangle-exclamation"></i> Revoke Release</h2>
+      <button style="background: none; border: none; color: #fff; cursor: pointer; font-size: 1.2rem;" onclick="closeRevokeModal()">&times;</button>
+    </div>
+    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+      Revoking a release marks it inactive on the update server. Clients checking for updates will no longer receive this release.
+    </p>
+    <form onsubmit="handleRevokeSubmit(event)">
+      <input type="hidden" id="revoke-release-id">
+      <div class="form-group">
+        <label>Revocation Justification / Security Reason</label>
+        <textarea id="revoke-reason-input" rows="3" placeholder="e.g. Critical regression or CVE discovered in diagnostic telemetry." required></textarea>
+      </div>
+      <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+        <button type="button" class="btn btn-secondary" onclick="closeRevokeModal()">Cancel</button>
+        <button type="submit" class="btn btn-danger">Confirm Revocation</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -206,4 +369,3 @@
 {% block scripts %}
 <script src="/static/js/admin.js"></script>
 {% endblock %}
-

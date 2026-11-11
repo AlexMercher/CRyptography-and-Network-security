@@ -128,7 +128,37 @@ class ReleaseManager:
             "signature": row["signature"],
             "published_at": row["published_at"],
             "expires_at": row["expires_at"],
-            "status": row["status"]
+            "status": row["status"],
+            "revocation_reason": row["revocation_reason"] if "revocation_reason" in row.keys() else None,
+            "revoked_at": row["revoked_at"] if "revoked_at" in row.keys() else None
+        }
+
+    @staticmethod
+    def get_release_by_id(release_id: int, db_file = None) -> Optional[Dict[str, Any]]:
+        conn = get_db_connection(db_file)
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM releases WHERE id = ?", (release_id,))
+        row = cursor.fetchone()
+        conn.close()
+        if not row:
+            return None
+        return {
+            "id": row["id"],
+            "software_id": row["software_id"],
+            "version": row["version"],
+            "release_sequence": row["release_sequence"],
+            "description": row["description"],
+            "package_filename": row["package_filename"],
+            "package_size": row["package_size"],
+            "package_hash": row["package_hash"],
+            "metadata": json.loads(row["signed_metadata_json"]),
+            "signed_metadata_raw": row["signed_metadata_json"],
+            "signature": row["signature"],
+            "published_at": row["published_at"],
+            "expires_at": row["expires_at"],
+            "status": row["status"],
+            "revocation_reason": row["revocation_reason"] if "revocation_reason" in row.keys() else None,
+            "revoked_at": row["revoked_at"] if "revoked_at" in row.keys() else None
         }
 
     @staticmethod
@@ -159,15 +189,21 @@ class ReleaseManager:
                 "signature": r["signature"],
                 "published_at": r["published_at"],
                 "expires_at": r["expires_at"],
-                "status": r["status"]
+                "status": r["status"],
+                "revocation_reason": r["revocation_reason"] if "revocation_reason" in r.keys() else None,
+                "revoked_at": r["revoked_at"] if "revoked_at" in r.keys() else None
             })
         return results
 
     @staticmethod
     def revoke_release(release_id: int, reason: str = "Administrative revocation", db_file = None) -> bool:
+        now_iso = datetime.now(timezone.utc).isoformat()
         conn = get_db_connection(db_file)
         cursor = conn.cursor()
-        cursor.execute("UPDATE releases SET status = 'revoked' WHERE id = ?", (release_id,))
+        cursor.execute(
+            "UPDATE releases SET status = 'revoked', revocation_reason = ?, revoked_at = ? WHERE id = ?",
+            (reason, now_iso, release_id)
+        )
         success = cursor.rowcount > 0
         conn.commit()
         conn.close()
