@@ -11,7 +11,20 @@ from server.app import create_app
 
 def main():
     demo_enabled = "--demo" in sys.argv or os.environ.get("CNS_DEMO_MODE", "false").lower() in ("true", "1", "yes")
+    new_session_requested = "--new-demo-session" in sys.argv or "--new-session" in sys.argv
+    
+    if new_session_requested:
+        from server.database.database import ensure_canonical_baseline
+        sess = ensure_canonical_baseline(force_new_session=True, actor="cli")
+        print(f"[+] Explicit presentation session requested: initialized {sess['session_id']}")
+
     app = create_app({"DEMO_MODE": demo_enabled})
+
+    from server.database.database import get_active_presentation_session
+    active_sess = get_active_presentation_session()
+    sess_id = active_sess["session_id"] if active_sess else "None"
+    sess_time = active_sess["created_at"] if active_sess else "None"
+
     cert_file = PROJECT_ROOT / "certs" / "server.crt"
     key_file = PROJECT_ROOT / "certs" / "server.key"
     
@@ -21,6 +34,9 @@ def main():
     print("Default Admin Credentials:")
     print("  Username: admin")
     print("  Password: Admin@SecureUpdate2026!")
+    print("-" * 60)
+    print(f"Presentation Session: {sess_id}")
+    print(f"Session Started:      {sess_time}")
     print("-" * 60)
     if demo_enabled:
         print("[+] Demonstration Mode: ENABLED (Authorized client reset enabled on loopback)")

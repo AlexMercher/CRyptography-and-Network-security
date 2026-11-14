@@ -364,6 +364,37 @@
   </div>
 </div>
 
+<!-- Software Release Catalog -->
+<div class="card" style="margin-bottom: 2rem;">
+  <div class="card-header">
+    <div>
+      <h2 class="card-title"><i class="fa-solid fa-list-check"></i> Available Software Releases Catalog</h2>
+      <span style="font-size: 0.75rem; color: var(--text-muted);">Published versions on the update repository with cryptographic status and upgrade eligibility.</span>
+    </div>
+    <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;" onclick="loadReleaseCatalog()">
+      <i class="fa-solid fa-arrows-rotate"></i> Refresh Catalog
+    </button>
+  </div>
+  <div class="table-responsive">
+    <table id="client-catalog-table">
+      <thead>
+        <tr>
+          <th>Software</th>
+          <th>Version</th>
+          <th>Seq</th>
+          <th>Package</th>
+          <th>SHA-256 Digest</th>
+          <th>Status</th>
+          <th>Eligibility</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td colspan="7" style="text-align: center; color: var(--text-muted);">Loading release catalog...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
 <!-- Installation & Activity History -->
 <div class="card" style="margin-bottom: 2rem;">
   <div class="card-header">

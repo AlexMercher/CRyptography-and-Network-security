@@ -111,8 +111,32 @@ class ClientUpdater:
                 "step": step_num,
                 "name": name,
                 "success": success,
+                "status": "PASSED" if success else "FAILED",
                 "message": message
             })
+
+        def populate_skipped_steps(failed_stage: int):
+            pipeline_names = {
+                1: "Retrieve Signed Release Metadata",
+                2: "Ed25519 Digital Signature Verification",
+                3: "Metadata Validation and Freshness Check",
+                4: "Version and Rollback Validation",
+                5: "Package Download",
+                6: "Calculate Package SHA-256 Digest",
+                7: "Verify Package Hash Match",
+                8: "Package Format & Path Traversal Inspection",
+                9: "Secure Staged Installation & Health Check",
+                10: "Commit Trusted Installed Version State",
+                11: "Telemetry & Final Audit Logging"
+            }
+            for s_num in range(failed_stage + 1, 12):
+                steps.append({
+                    "step": s_num,
+                    "name": pipeline_names.get(s_num, f"Step {s_num}"),
+                    "success": False,
+                    "status": "SKIPPED",
+                    "message": f"Step skipped because verification halted at step {failed_stage}."
+                })
 
         # Step 1: Retrieve signed release metadata
         if override_payload:
@@ -122,6 +146,7 @@ class ClientUpdater:
             avail, payload, msg = self.check_for_updates(custom_verify=custom_verify)
             if not avail:
                 record_step(1, "Retrieve Signed Release Metadata", False, msg)
+                populate_skipped_steps(1)
                 return {"success": False, "error_stage": 1, "message": msg, "steps": steps}
             record_step(1, "Retrieve Signed Release Metadata", True, f"Retrieved release metadata: {msg}")
 
@@ -140,6 +165,7 @@ class ClientUpdater:
                 details=sig_msg, release_id=release_id,
                 security_event={"type": "INVALID_SIGNATURE", "description": sig_msg}
             )
+            populate_skipped_steps(2)
             return {"success": False, "error_stage": 2, "message": sig_msg, "steps": steps}
         record_step(2, "Ed25519 Digital Signature Verification", True, sig_msg)
 
@@ -152,6 +178,7 @@ class ClientUpdater:
                 details=meta_msg, release_id=release_id,
                 security_event={"type": "EXPIRED_OR_INVALID_METADATA", "description": meta_msg}
             )
+            populate_skipped_steps(3)
             return {"success": False, "error_stage": 3, "message": meta_msg, "steps": steps}
         record_step(3, "Metadata Validation and Freshness Check", True, meta_msg)
 
@@ -164,6 +191,7 @@ class ClientUpdater:
                 details=ver_msg, release_id=release_id,
                 security_event={"type": "ROLLBACK_ATTEMPT", "description": ver_msg}
             )
+            populate_skipped_steps(4)
             return {"success": False, "error_stage": 4, "message": ver_msg, "steps": steps}
         record_step(4, "Version and Rollback Validation", True, ver_msg)
 
@@ -183,6 +211,7 @@ class ClientUpdater:
                 details=dl_msg, release_id=release_id,
                 security_event={"type": "DOWNLOAD_FAILED", "description": dl_msg}
             )
+            populate_skipped_steps(5)
             return {"success": False, "error_stage": 5, "message": dl_msg, "steps": steps}
         record_step(5, "Package Download", True, dl_msg)
 
@@ -205,6 +234,7 @@ class ClientUpdater:
                 details=hash_msg, release_id=release_id,
                 security_event={"type": "PACKAGE_TAMPER_DETECTED", "description": hash_msg}
             )
+            populate_skipped_steps(7)
             return {"success": False, "error_stage": 7, "message": hash_msg, "steps": steps}
         record_step(7, "Verify Package Hash Match", True, f"SHA-256 digest match verified ({computed_hash}).")
 
@@ -217,6 +247,7 @@ class ClientUpdater:
                 details=safe_msg, release_id=release_id,
                 security_event={"type": "ZIP_SLIP_ATTEMPT", "description": safe_msg}
             )
+            populate_skipped_steps(8)
             return {"success": False, "error_stage": 8, "message": safe_msg, "steps": steps}
         record_step(8, "Package Format & Path Traversal Inspection", True, safe_msg)
 
@@ -234,6 +265,7 @@ class ClientUpdater:
                 details=inst_msg, release_id=release_id,
                 security_event={"type": "INSTALLATION_FAILURE", "description": inst_msg}
             )
+            populate_skipped_steps(9)
             return {"success": False, "error_stage": 9, "message": inst_msg, "steps": steps}
         record_step(9, "Secure Staged Installation & Health Check", True, inst_msg)
 

@@ -13,7 +13,7 @@ async function checkAuth() {
       currentUser = data.user;
       badge.className = "badge badge-success";
       badge.innerText = `Active: ${data.user}`;
-      container.innerHTML = `<button class="btn btn-secondary" onclick="handleLogout()"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>`;
+      container.innerHTML = `<button class="btn btn-warning" onclick="promptNewPresentationSession()"><i class="fa-solid fa-arrows-rotate"></i> Start New Presentation Session</button> <button class="btn btn-secondary" onclick="handleLogout()"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>`;
       loadStats();
       loadReleases();
       loadLogs();
@@ -88,12 +88,56 @@ async function loadStats() {
     const res = await fetch("/api/admin/stats");
     if (!res.ok) return;
     const data = await res.json();
-    document.getElementById("stat-releases").innerText = `${data.published_releases} / ${data.total_releases}`;
+    document.getElementById("stat-releases").innerText = `${data.published_releases} pub / ${data.prepared_releases !== undefined ? data.prepared_releases : 0} prep`;
     document.getElementById("stat-clients").innerText = data.active_clients;
     document.getElementById("stat-security").innerText = data.blocked_attacks !== undefined ? data.blocked_attacks : data.security_events;
     document.getElementById("stat-installs").innerText = data.successful_installs;
+
+    const sessBadge = document.getElementById("active-session-badge");
+    if (sessBadge && data.active_session) {
+      sessBadge.innerText = data.active_session.session_id;
+      sessBadge.className = "badge badge-success";
+      sessBadge.title = `Created: ${data.active_session.created_at} | Status: ${data.active_session.status}`;
+    }
   } catch (err) {
     console.error("Stats load error:", err);
+  }
+}
+
+async function promptNewPresentationSession() {
+  const confirmed = confirm(
+    "Start New Presentation Session?\n\n" +
+    "This will restore the demonstration database and client to their canonical baseline:\n" +
+    "• All DemoApp releases (1.0.0 through 1.4.0) will be restored to active (published)\n" +
+    "• Any presentation revocations will be cleared\n" +
+    "• Demonstration client will be reset to DemoApp v1.0.0 (Seq 1)\n" +
+    "• Presentation logs and temporary state will be cleared\n" +
+    "• Administrator accounts and cryptographic keys will be preserved\n\n" +
+    "Do you want to proceed?"
+  );
+  if (!confirmed) return;
+
+  try {
+    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    const headers = { "Content-Type": "application/json" };
+    if (csrfMeta && csrfMeta.content) {
+      headers["X-CSRF-Token"] = csrfMeta.content;
+    }
+    const res = await fetch("/api/admin/new-session", {
+      method: "POST",
+      headers: headers
+    });
+    const data = await res.json();
+    if (res.ok) {
+      alert("New Presentation Session Initialized!\nSession ID: " + data.session.session_id);
+      loadStats();
+      loadReleases();
+      loadLogs();
+    } else {
+      alert("Failed to start new presentation session: " + (data.error || "Unknown error"));
+    }
+  } catch (err) {
+    alert("Network error: " + err);
   }
 }
 
@@ -172,10 +216,52 @@ async function handlePublish(e) {
   }
 }
 
+async function publishPreparedRelease(releaseId) {
+  const rel = currentReleasesCache[releaseId];
+  const verName = rel ? `v${rel.version} (Sequence ${rel.release_sequence})` : `Release #${releaseId}`;
+  const confirmed = confirm(`Publish ${verName} to Clients?\n\nThis will transition the release state to 'published' and make it immediately discoverable by client devices.`);
+  if (!confirmed) return;
+
+  try {
+    const res = await fetch(`/api/admin/releases/${releaseId}/publish`, {
+      method: "POST"
+    });
+    const data = await res.json();
+    if (res.ok) {
+      alert(data.message);
+      await loadReleases();
+      await loadStats();
+      await loadLogs();
+    } else {
+      alert("Failed to publish release: " + (data.error || "Unknown error"));
+    }
+  } catch (err) {
+    alert("Publish network error: " + err);
+  }
+}
+
 async function quickPublish(version, sequence, desc) {
+  // Check if this version is already prepared in cache
+  for (const id in currentReleasesCache) {
+    const r = currentReleasesCache[id];
+    if (r.version === version) {
+      if (r.status === "prepared") {
+        return publishPreparedRelease(r.id);
+      } else if (r.status === "published") {
+        alert(`DemoApp v${version} (Sequence ${sequence}) is already published and active!`);
+        return;
+      } else if (r.status === "revoked") {
+        alert(`DemoApp v${version} (Sequence ${sequence}) is currently revoked.`);
+        return;
+      }
+    }
+  }
+
   const pkgMap = {
-    "1.1.0": { filename: "demoapp-1.1.0.zip", size: 1268 },
-    "1.2.0": { filename: "demoapp-1.2.0.zip", size: 1440 }
+    "1.1.0": { filename: "demoapp-1.1.0.zip", size: 1272 },
+    "1.2.0": { filename: "demoapp-1.2.0.zip", size: 1441 },
+    "1.3.0": { filename: "demoapp-1.3.0.zip", size: 1825 },
+    "1.4.0": { filename: "demoapp-1.4.0.zip", size: 2427 }
   };
   const pkg = pkgMap[version];
   if (!pkg) return;
@@ -226,49 +312,97 @@ async function loadReleases() {
     const res = await fetch("/api/admin/releases");
     if (!res.ok) return;
     const data = await res.json();
-    const tbody = document.querySelector("#releases-table tbody");
-    tbody.innerHTML = "";
     currentReleasesCache = {};
 
-    if (!data.releases || data.releases.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted);">No software releases published yet.</td></tr>`;
-      return;
+    const pubTbody = document.querySelector("#releases-table tbody");
+    const prepTbody = document.querySelector("#prepared-releases-table tbody");
+    const prepBadge = document.getElementById("prepared-count-badge");
+
+    pubTbody.innerHTML = "";
+    if (prepTbody) prepTbody.innerHTML = "";
+
+    if (data.releases) {
+      data.releases.forEach(r => { currentReleasesCache[r.id] = r; });
     }
 
-    data.releases.forEach(r => {
-      currentReleasesCache[r.id] = r;
-      const tr = document.createElement("tr");
-      tr.style.cursor = "pointer";
-      tr.title = "Click to inspect full cryptographic release metadata & verification details";
+    const prepList = data.prepared_releases || (data.releases ? data.releases.filter(r => r.status === 'prepared').sort((a,b) => a.release_sequence - b.release_sequence) : []);
+    const pubList = data.published_releases || (data.releases ? data.releases.filter(r => r.status !== 'prepared').sort((a,b) => b.release_sequence - a.release_sequence) : []);
 
-      const shortHash = r.package_hash ? r.package_hash.substring(0, 10) + "..." : "N/A";
-      const shortSig = r.signature ? r.signature.substring(0, 12) + "..." : "N/A";
-      const statusBadge = r.status === "published"
-        ? `<span class="badge badge-success"><i class="fa-solid fa-check"></i> Published</span>`
-        : `<span class="badge badge-danger"><i class="fa-solid fa-ban"></i> Revoked</span>`;
+    if (prepBadge) {
+      prepBadge.innerText = `${prepList.length} Prepared`;
+      prepBadge.className = prepList.length > 0 ? "badge badge-warning" : "badge badge-info";
+    }
 
-      tr.innerHTML = `
-        <td><strong>#${r.id}</strong></td>
-        <td><strong>${r.software_id}</strong></td>
-        <td><code>v${r.version}</code></td>
-        <td><span class="badge badge-info">Seq: ${r.release_sequence}</span></td>
-        <td><code title="${r.package_hash}">${shortHash}</code></td>
-        <td><code title="${r.signature}">${shortSig}</code></td>
-        <td>${new Date(r.published_at).toLocaleString()}</td>
-        <td>${statusBadge}</td>
-        <td>
-          <button class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.72rem; margin-right: 0.25rem;" onclick="event.stopPropagation(); openReleaseDetails(${r.id})">
-            <i class="fa-solid fa-magnifying-glass"></i> Details
-          </button>
-          ${r.status === "published" 
-            ? `<button class="btn btn-danger" style="padding: 0.2rem 0.5rem; font-size: 0.72rem;" onclick="event.stopPropagation(); promptRevoke(${r.id})"><i class="fa-solid fa-ban"></i> Revoke</button>` 
-            : `<span style="font-size: 0.75rem; color: var(--text-muted);"><i class="fa-solid fa-lock"></i> Revoked</span>`}
-        </td>
-      `;
+    // 1. Render Prepared Releases (sorted release_sequence ASC)
+    if (prepTbody) {
+      if (prepList.length === 0) {
+        prepTbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 1rem;">No prepared releases pending publication. All packages are published.</td></tr>`;
+      } else {
+        prepList.forEach(r => {
+          const tr = document.createElement("tr");
+          tr.style.cursor = "pointer";
+          const shortHash = r.package_hash ? r.package_hash.substring(0, 10) + "..." : "N/A";
+          tr.innerHTML = `
+            <td><strong>${r.software_id}</strong></td>
+            <td><code>v${r.version}</code></td>
+            <td><span class="badge badge-info">Seq: ${r.release_sequence}</span></td>
+            <td>${r.package_filename}</td>
+            <td><code title="${r.package_hash}">${shortHash}</code></td>
+            <td style="font-size: 0.8rem; color: #cbd5e1;">${r.description || '-'}</td>
+            <td><span class="badge badge-warning"><i class="fa-solid fa-clock"></i> Prepared</span></td>
+            <td>
+              <button class="btn btn-primary" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;" onclick="event.stopPropagation(); publishPreparedRelease(${r.id})">
+                <i class="fa-solid fa-cloud-arrow-up"></i> Publish
+              </button>
+              <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.72rem; margin-left: 0.25rem;" onclick="event.stopPropagation(); openReleaseDetails(${r.id})">
+                <i class="fa-solid fa-magnifying-glass"></i> Details
+              </button>
+            </td>
+          `;
+          tr.addEventListener("click", () => openReleaseDetails(r.id));
+          prepTbody.appendChild(tr);
+        });
+      }
+    }
 
-      tr.addEventListener("click", () => openReleaseDetails(r.id));
-      tbody.appendChild(tr);
-    });
+    // 2. Render Published Releases (sorted release_sequence DESC)
+    if (pubList.length === 0) {
+      pubTbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 1rem;">No published releases available yet.</td></tr>`;
+    } else {
+      pubList.forEach(r => {
+        const tr = document.createElement("tr");
+        tr.style.cursor = "pointer";
+        tr.title = "Click to inspect full cryptographic release metadata & verification details";
+
+        const shortHash = r.package_hash ? r.package_hash.substring(0, 10) + "..." : "N/A";
+        const shortSig = r.signature ? r.signature.substring(0, 12) + "..." : "N/A";
+        const statusBadge = r.status === "published"
+          ? `<span class="badge badge-success"><i class="fa-solid fa-check"></i> Published</span>`
+          : `<span class="badge badge-danger"><i class="fa-solid fa-ban"></i> Revoked</span>`;
+
+        tr.innerHTML = `
+          <td><strong>#${r.id}</strong></td>
+          <td><strong>${r.software_id}</strong></td>
+          <td><code>v${r.version}</code></td>
+          <td><span class="badge badge-info">Seq: ${r.release_sequence}</span></td>
+          <td><code title="${r.package_hash}">${shortHash}</code></td>
+          <td><code title="${r.signature}">${shortSig}</code></td>
+          <td>${new Date(r.published_at).toLocaleString()}</td>
+          <td>${statusBadge}</td>
+          <td>
+            <button class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.72rem; margin-right: 0.25rem;" onclick="event.stopPropagation(); openReleaseDetails(${r.id})">
+              <i class="fa-solid fa-magnifying-glass"></i> Details
+            </button>
+            ${r.status === "published" 
+              ? `<button class="btn btn-danger" style="padding: 0.2rem 0.5rem; font-size: 0.72rem;" onclick="event.stopPropagation(); promptRevoke(${r.id})"><i class="fa-solid fa-ban"></i> Revoke</button>` 
+              : `<span style="font-size: 0.75rem; color: var(--text-muted);"><i class="fa-solid fa-lock"></i> Revoked</span>`}
+          </td>
+        `;
+
+        tr.addEventListener("click", () => openReleaseDetails(r.id));
+        pubTbody.appendChild(tr);
+      });
+    }
   } catch (err) {
     console.error("Releases load error:", err);
   }
@@ -297,6 +431,10 @@ async function openReleaseDetails(releaseId) {
     badge.className = "badge badge-success";
     badge.innerText = "Status: Published";
     document.getElementById("modal-btn-revoke").style.display = "inline-flex";
+  } else if (release.status === "prepared") {
+    badge.className = "badge badge-warning";
+    badge.innerText = "Status: Prepared (Awaiting Publication)";
+    document.getElementById("modal-btn-revoke").style.display = "none";
   } else {
     badge.className = "badge badge-danger";
     badge.innerText = "Status: Revoked";

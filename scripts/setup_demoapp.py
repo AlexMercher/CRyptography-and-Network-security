@@ -5,6 +5,8 @@ import zipfile
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 def build_zip(source_dir: Path, output_zip: Path):
     output_zip.parent.mkdir(parents=True, exist_ok=True)
@@ -34,6 +36,11 @@ def setup():
         shutil.rmtree(current_dir)
     shutil.copytree(versions_dir / "1.0.0", current_dir)
     print(f"[+] Initialized client application at {current_dir} with version 1.0.0")
+
+    # Seed canonical releases and start presentation session baseline
+    from server.database.database import ensure_canonical_baseline
+    sess = ensure_canonical_baseline(force_new_session=True, actor="setup_script")
+    print(f"[+] Initialized Presentation Session: {sess['session_id']} (All 5 DemoApp releases published)")
 
 if __name__ == "__main__":
     setup()

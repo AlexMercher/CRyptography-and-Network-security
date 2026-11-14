@@ -1,6 +1,6 @@
 {
   "environment": "production",
   "log_level": "INFO",
-  "port": 8080
+  "port": 8080,
+  "analytics_enabled": true
 }
-

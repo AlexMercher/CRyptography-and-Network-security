@@ -30,8 +30,10 @@ def create_app(test_config=None):
     if test_config:
         app.config.update(test_config)
         
-    # Initialize SQLite database
+    # Initialize SQLite database and ensure active presentation session exists
     init_db()
+    from server.database.database import ensure_canonical_baseline
+    ensure_canonical_baseline(force_new_session=False)
 
     @app.before_request
     def ensure_csrf_token():

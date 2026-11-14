@@ -30,22 +30,33 @@ def check_updates():
             "INSERT INTO clients (client_id, installed_version, last_check, status) VALUES (?, ?, ?, 'active')",
             (client_id, current_version, now_iso)
         )
+    # Determine client's installed sequence number from releases if known
+    cursor.execute(
+        "SELECT release_sequence FROM releases WHERE software_id = ? AND version = ?",
+        (software_id, current_version)
+    )
+    cur_rel = cursor.fetchone()
+    current_seq = cur_rel["release_sequence"] if cur_rel else 0
     conn.commit()
     conn.close()
-    
-    latest = ReleaseManager.get_latest_release(software_id)
+
+    # Query only eligible (published, non-revoked) releases strictly newer than current sequence
+    latest = ReleaseManager.get_latest_release(software_id, min_sequence=current_seq)
     if not latest:
-        log_update_activity(client_id, "CHECK", "NO_RELEASES_AVAILABLE", details="No published release found")
+        log_update_activity(
+            client_id, "CHECK", "NO_RELEASES_AVAILABLE",
+            details=f"No eligible higher release available for v{current_version} (Seq {current_seq})"
+        )
         return jsonify({
             "update_available": False,
-            "message": "No published releases available for this software."
+            "message": f"System is up-to-date. No eligible updates available for v{current_version}."
         }), 200
         
     log_update_activity(
         client_id=client_id,
         action="CHECK",
         verification_result="CHECKED",
-        details=f"Current: {current_version}, Latest on server: {latest['version']}",
+        details=f"Current: {current_version} (Seq: {current_seq}), Latest eligible on server: {latest['version']} (Seq: {latest['release_sequence']})",
         release_id=latest["id"]
     )
     
@@ -55,6 +66,12 @@ def check_updates():
         "metadata": latest["metadata"],
         "signature": latest["signature"]
     }), 200
+
+@updates_bp.route("/catalog", methods=["GET"])
+def get_release_catalog():
+    software_id = request.args.get("software_id", "demoapp").strip()
+    releases = ReleaseManager.list_releases(software_id)
+    return jsonify({"catalog": releases}), 200
 
 @updates_bp.route("/download/<filename>", methods=["GET"])
 def download_package(filename: str):

@@ -1,13 +1,13 @@
 # Complete Execution & Demonstration Guide (`run.md`)
 ### Secure Software Update System with Cryptographic Verification (CNS)
 
-This document provides a comprehensive, step-by-step walkthrough to run, test, and demonstrate the full nature of the Secure Software Update System in front of your professor or evaluator.
+This document provides a comprehensive, step-by-step walkthrough to run, test, and demonstrate the Secure Software Update System in front of your professor or evaluator.
 
 ---
 
 ## 1. Environment Setup
 
-Always ensure the project's conda environment is activated before running commands or starting servers.
+Always ensure the project's conda environment is activated before running commands or starting servers:
 
 ```powershell
 # 1. Activate the environment
@@ -24,42 +24,81 @@ pip install -r requirements.txt
 
 ---
 
-## 2. Complete Verification Suite (Pytest)
+## 2. Presentation Session Lifecycle & Execution Workflows
 
-Run the comprehensive automated test suite covering all mandatory test cases across Unit, Integration, Security, and UI endpoint layers:
+The system incorporates **Presentation Session Management** to guarantee predictable, reproducible demonstrations while preserving all mutable actions during an active session.
+
+### Workflow A: Preparing for a Fresh Professor Demonstration
+To start from a clean canonical baseline where:
+- DemoApp **v1.0.0 (Seq 1)** is published and installed on the client device.
+- DemoApp releases **1.1.0, 1.2.0, 1.3.0, and 1.4.0** are in a **Prepared (unpublished)** state awaiting administrative publication.
+- Client discovers zero unapproved updates until you explicitly publish them.
+
+```powershell
+# 1. Ensure all packages are built and signed
+python scripts/setup_demoapp.py
+
+# 2. Start server in demonstration mode with a fresh presentation session
+python run_server.py --demo --new-demo-session
+```
+
+*Alternatively, click the **Start New Presentation Session** button in the Admin Dashboard at any time.*
+
+### Workflow B: Resuming / Restarting During an Active Presentation
+If you restart the server during a presentation or refresh the browser, the application **automatically preserves** the existing session state (including published releases, revocations, installed versions, and audit logs):
+
+```powershell
+python run_server.py --demo
+```
+
+### Presentation Session Principles:
+1. **In-Session Persistence:** When you publish a prepared release, revoke a release, or advance client versions, changes persist across page refreshes, dashboard navigation, and server process restarts.
+2. **Prepared vs Published Segregation:** The Admin Dashboard separates **Prepared Releases (Awaiting Publication)** from **Published Releases**. Releasing an update is an explicit, authenticated administrative action.
+3. **Sequential Release Publication:** Prepared releases must be published in monotonic sequence (v1.1.0 -> v1.2.0 -> v1.3.0 -> v1.4.0). Out-of-order publication is strictly blocked.
+4. **Predictable Baseline on Demand:** Triggering a new session (`--new-demo-session` or dashboard button) restores v1.0.0 as published, sets 1.1.0–1.4.0 to prepared, resets the client baseline to 1.0.0 (seq 1), clears demonstration logs, and issues a new session identifier.
+5. **Security Anchor Preservation:** Administrator credentials (`admin`), publisher Ed25519 keys, and TLS certificates are strictly preserved and never wiped or regenerated.
+
+---
+
+## 3. Complete Verification Suite (Pytest — 95 Tests)
+
+Run the comprehensive automated test suite covering Unit, Integration, Security, Reset, Archive Safety, Session Management, and Publication Lifecycle layers:
 
 ```powershell
 pytest -v
 ```
 
-### Expected Test Results:
-All **34 tests** pass with 100% success rate:
-- **`tests/test_hashing.py`**: Verifies SHA-256 determinism, byte tampering detection, and chunked streaming file hashing.
-- **`tests/test_signatures.py`**: Verifies Ed25519 canonical JSON signing, valid signature verification, metadata alteration detection, rogue key rejection, and expiration checks.
-- **`tests/test_tampering.py`**: Verifies TC04 (package byte tampering) and TC05 (metadata tampering).
-- **`tests/test_rollback.py`**: Verifies TC08 (version rollback rejection) and TC09 (sequence replay rejection).
-- **`tests/test_installation.py`**: Verifies TC15 (Zip-Slip / path traversal rejection), TC16 (valid update installation), and TC17 (installation failure rollback to backup).
-- **`tests/test_server_api.py`**: Verifies TC10 & TC11 (unauthorized admin access & publishing rejection), admin login, release details inspection, log filtering, client history, diagnostic export, and `/how-it-works` template rendering.
-- **`tests/test_integration.py`**: Verifies TC07 (unauthorized publisher), TC12 (interrupted download), TC13 (mismatched software ID), TC14 (expired metadata), and TC18 (invalid HTTPS certificate rejection).
+### Verified Test Categories (95 / 95 Passed):
+- **`tests/test_presentation_sessions.py` (22 Tests)**:
+  - **Group A (Session Persistence)**: Initial creation, revocation persistence, browser refresh persistence, dashboard navigation persistence, server restart persistence, and client update filtering.
+  - **Group B (New Session Lifecycle)**: Baseline restoration after revocation, 5-version catalogue restoration, client baseline reset, unique session IDs, session isolation, key preservation, and administrator login preservation.
+  - **Group C (Release Visibility)**: Database records for 1.0.0–1.4.0, API serialization, Admin Dashboard rendering, progressive candidate detection (1.1.0 after publish, 1.4.0 when all published), intermediate revocation handling (skipping 1.2.0), and latest revocation fallback (1.4.0 -> 1.3.0).
+  - **Group D (Publication Lifecycle & Pipeline States)**: Out-of-order publication prevention, complete end-to-end multi-version update cycle (1.0 -> 1.1 -> 1.2 -> 1.3 -> 1.4), and explicit pipeline statuses (`PASSED`, `FAILED`, `SKIPPED`).
+- **`tests/test_hashing.py` (4 Tests)**: SHA-256 determinism, byte tampering detection, and streaming file hashing.
+- **`tests/test_signatures.py` (7 Tests)**: Ed25519 canonical JSON signing, valid signature verification, metadata tampering detection, unauthorized key rejection, expiration validation, and SemVer comparisons.
+- **`tests/test_installation.py` (9 Tests)**: ZipSlip path traversal protection, valid staged installation, failed installation recovery, archive size limits, single file limits, total uncompressed size limits, member count limits, compression ratio limits, encrypted entry rejection, duplicate member rejection, corrupt archive rejection, and streaming extraction byte-limit enforcement.
+- **`tests/test_reset_and_scenarios.py` (32 Tests)**: Token hygiene (absent from HTML/DOM and API responses), fail-closed loopback authorization, constant-time `hmac.compare_digest`, operational conditions R1–R12, regressions SIZ-001, ISO-001, RST-001, TST-001, all 6 scenario API runs, and repeated updates 1.0.0 through 1.4.0.
+- **`tests/test_rollback.py` (4 Tests)**: Older version rollback rejection, same-version reinstallation rejection, sequence replay rejection, and monotonic sequence advancement.
+- **`tests/test_server_api.py` (11 Tests)**: Authentication enforcement, unauthorized publishing rejection, admin login, release details inspection, audit log filtering, client history, diagnostic export, and `/how-it-works` rendering.
+- **`tests/test_integration.py` (4 Tests)**: Unauthorized publisher attack, expired release rejection, mismatched software ID, and invalid HTTPS certificate rejection.
+- **`tests/test_tampering.py` (2 Tests)**: Package tampering (TC04) and metadata tampering (TC05).
 
 ---
 
-## 3. Demonstration Mode 1: Automated Attack Simulation CLI
+## 4. Demonstration Mode 1: Automated Attack Simulation CLI
 
-Run the dedicated demonstration runner to execute the **6 core presentation scenarios** with detailed cryptographic output:
+Run the attack demonstration runner to execute the **6 core presentation scenarios** with detailed cryptographic output:
 
 ```powershell
 python simulate_attacks.py --all
 ```
 
-*The script automatically starts the local HTTPS update server daemon if it is not already running.*
+*The script automatically connects to or starts the local HTTPS update server daemon.*
 
 ### Running Scenarios Individually:
 
-You can trigger any individual scenario on demand:
-
 ```powershell
-# Scenario 1 — Successful Update (Genuine DemoApp 1.0.0 -> 1.1.0)
+# Scenario 1 — Successful Genuine Update (DemoApp 1.0.0 -> 1.1.0)
 python simulate_attacks.py --scenario 1
 
 # Scenario 2 — Package Tampering Attack (SHA-256 Digest Mismatch)
@@ -89,54 +128,39 @@ python simulate_attacks.py --scenario 6
 | **Step 5** | Package Download | Isolated streaming into quarantine `.tmp` buffer | Connection aborts, partial downloads |
 | **Step 6** | Calculate Package SHA-256 Digest | 64 KB chunked cryptographic digest generation | Stream-level corruption |
 | **Step 7** | Verify Package Hash Match | Strict equality with signed `package_hash` | **Scenario 2 (Package Tampering)** |
-| **Step 8** | Package Format & Path Traversal | ZipSlip protection (no `..` or root escaping paths) | Directory traversal malicious archives |
+| **Step 8** | Package Format & Path Traversal | ZipSlip & ZIP bomb protection (limits, ratio, paths) | Directory traversal, resource exhaustion |
 | **Step 9** | Secure Staged Installation & Health Check | Extract to `.staging/`, verify health, preserve `.backup/` | Broken/incomplete application binaries |
 | **Step 10** | Commit Trusted Installed Version State | Atomic filesystem swap, commit `state.json` | Desynchronization between disk & state |
 | **Step 11** | Telemetry & Final Audit Logging | Post cryptographically signed audit report to server | Fleet compliance drift, silent failures |
 
 ---
 
-## 4. Demonstration Mode 2: Live Interactive Web Dashboards
+## 5. Demonstration Mode 2: Live Interactive Web Dashboards
 
-To demonstrate the full graphical interface with real-time pipeline visualization and administrative telemetry:
-
-### Step 4.1: Start the HTTPS Update Server
-In your terminal, execute:
-
+### Step 5.1: Start the HTTPS Update Server
 ```powershell
-conda activate ./venv
-
-# To enable demonstration mode with authorized loopback reset:
 python run_server.py --demo
-
-# Note: Production mode defaults to fail-closed (DEMO_MODE=False):
-# python run_server.py
 ```
 
-Output:
+Server Controller Banner:
 ```text
 ============================================================
    SECURE SOFTWARE UPDATE SYSTEM — SERVER CONTROLLER
 ============================================================
 Default Admin Credentials:
   Username: admin
-  Password: Admin@SecureUpdate2026!
+  Password: [PASSWORD]
+------------------------------------------------------------
+Presentation Session: sess-20261114042926-c84ca32f
+Session Started:      2026-11-14T04:29:26.123456+00:00
 ------------------------------------------------------------
 [+] Demonstration Mode: ENABLED (Authorized client reset enabled on loopback)
 ------------------------------------------------------------
 [+] HTTPS Enabled (TLS 1.3)
     Admin Dashboard:  https://127.0.0.1:5000/admin
     Client Dashboard: https://127.0.0.1:5000/client
+    How It Works:     https://127.0.0.1:5000/how-it-works
     CA Certificate:   .../certs/ca.crt
-============================================================
-```
-
-> **Security Architecture Note on Client Reset:**
-> In production mode (`DEMO_MODE=False`), the client state reset capability is completely disabled. In demonstration mode (`--demo`), client state reset is restricted strictly to local loopback connections (`127.0.0.1`) and requires an authenticated administrator session with CSRF verification. No secret reset tokens are ever exposed to client HTML, DOM, or JavaScript.
-    Admin Dashboard:   https://127.0.0.1:5000/admin
-    Client Dashboard:  https://127.0.0.1:5000/client
-    How It Works:      https://127.0.0.1:5000/how-it-works
-    CA Certificate:    D:\projects\CNS\certs\ca.crt
 ============================================================
 ```
 
@@ -144,80 +168,58 @@ Default Admin Credentials:
 
 ---
 
-### Step 4.2: Administrator Dashboard Walkthrough
-Open [`https://127.0.0.1:5000/admin`](https://127.0.0.1:5000/admin) in your browser:
+### Step 5.2: Administrator Dashboard Walkthrough
+Open [`https://127.0.0.1:5000/admin`](https://127.0.0.1:5000/admin):
 
-1. **Automatic / Manual Session Authentication:**
-   - The dashboard automatically authenticates using default demo credentials or allows manual login (`admin` / `Admin@SecureUpdate2026!`).
-   - The badge displays glowing green **Active: admin**.
-2. **Review Live Database Metrics:**
-   - Real-time counts of Published Releases, Connected Clients, Attacks Blocked (Fail-Secure), and Successful Installs drawn directly from SQLite tables.
-3. **Clickable Release Rows & Release Details Modal:**
-   - Click on any release row in the **Published Software Releases** table.
-   - An inspector modal displays full release metadata: Software ID, Version, Monotonic Sequence, Package Filename, File Size, SHA-256 Digest (with 1-click copy), Ed25519 Signature (with 1-click copy), Expiration Timestamp, and Revocation Status.
-4. **Release Revocation with Reason:**
-   - Click **Revoke** on any active release.
-   - A modal dialog prompts for the revocation reason (e.g., *Discovered zero-day vulnerability in dependencies*).
-   - Once confirmed, the release is marked **REVOKED**, client checks will ignore it, and the revocation reason and timestamp are persisted in the database.
-5. **Interactive Security Event Filters:**
-   - Filter logs by **Event Type** (`ALL`, `SIGNATURE_VERIFY_FAILURE`, `PACKAGE_TAMPER_DETECTED`, `ROLLBACK_BLOCKED`, `MALICIOUS_PACKAGE_UPLOAD`, etc.).
-   - Filter by **Outcome** (`ALL`, `BLOCKED`, `SUCCESS`).
-   - Search logs in real time via the search box.
-
----
-
-### Step 4.3: Client Dashboard & Visual Verification Pipeline Walkthrough
-Open [`https://127.0.0.1:5000/client`](https://127.0.0.1:5000/client) in your browser:
-
-1. **Version Comparison Card:**
-   - Displays a side-by-side comparison between **Currently Installed Version** (e.g. `v1.0.0`, Sequence 1) and **Available Server Version** (e.g. `v1.1.0`, Sequence 2) with status badge (*Update Available* or *Up to Date*).
-2. **Package Metadata & Digest Inspection:**
-   - Displays target package filename, archive size, SHA-256 digest, and expiration date.
-3. **11-Step Cryptographic Verification Pipeline:**
-   - Click **Check & Apply Genuine Update**.
-   - Watch the pipeline execute sequentially across all 11 discrete steps.
-   - Cards display glowing cyan indicators during execution, turning green `[PASS]` on success.
-4. **Understandable Threat & Failure Breakdown:**
-   - When an attack scenario is run, an alert card renders:
-     - **What Happened:** Plain-English description of the intercepted threat.
-     - **Why It Was Blocked:** Technical explanation of the failed check.
-     - **Security Guarantee Enforced:** The cryptographic principle maintaining system integrity.
-5. **Client Installation & Audit History Table:**
-   - Shows historical updates, checks, and verification attempts with timestamps and status badges.
-6. **Export Diagnostic Report:**
-   - Click **Export Diagnostic Report (JSON)** to download a full client health report including client state, cryptographic anchors, runtime manifest, and recent logs.
+1. **Active Presentation Session Indicator:**
+   - Displays current session identifier (e.g. `sess-20261114...`).
+   - Click **Start New Presentation Session** to return the database and client to their initial baseline with full confirmation dialog.
+2. **Prepared Releases (Awaiting Publication) Table:**
+   - Displays releases that have been cryptographically packaged and signed on the server, but not yet published to clients (e.g. `1.1.0`, `1.2.0`, `1.3.0`, `1.4.0`).
+   - Sorted in ascending sequence order so the next release to publish is clearly visible at the top.
+   - Click **Publish** to transition a release to `published`. The server enforces strict monotonic ordering (e.g. attempting to publish 1.3.0 before 1.1.0 is rejected).
+3. **Published Software Releases Table:**
+   - Displays all currently published and revoked releases, sorted strictly by monotonic `release_sequence` descending (highest sequence at top).
+   - Click any row to open the **Release Inspector Modal** displaying complete cryptographic metadata, Ed25519 signature, and expiration window.
+4. **Live Revocation Demonstration:**
+   - Click **Revoke** on any published release (e.g. DemoApp v1.2.0).
+   - Enter a revocation reason (e.g., *Security vulnerability in network optimizer*).
+   - The status immediately turns red **REVOKED**, client checks will ignore v1.2.0, and the revocation persists across browser refreshes and server restarts.
+5. **Quick Demonstration Publisher:**
+   - One-click publishing buttons for DemoApp 1.1.0 through 1.4.0.
+6. **Security Threat Logs & Real-Time Filters:**
+   - Filter events by Type (`PACKAGE_TAMPER_DETECTED`, `INVALID_SIGNATURE`, `ROLLBACK_ATTEMPT`, `RELEASE_REVOKED`, etc.) and Result (`ALL`, `BLOCKED`, `SUCCESS`).
 
 ---
 
-### Step 4.4: Interactive "How It Works" Architecture & Cryptography Page
-Open [`https://127.0.0.1:5000/how-it-works`](https://127.0.0.1:5000/how-it-works) in your browser:
+### Step 5.3: Client Dashboard Walkthrough
+Open [`https://127.0.0.1:5000/client`](https://127.0.0.1:5000/client):
 
-This page provides an interactive, visual explanation of the entire system architecture across 6 comprehensive sections:
-
-1. **System Architecture Diagram (Interactive SVG):**
-   - Clickable SVG diagram containing Publisher, Package Processor, SHA-256 Engine, Ed25519 Signer, Central Update Server, Client Verifier, and Staged Installer.
-   - Clicking any node opens the **Component Inspector** showing its cryptographic role, threat mitigations, and source code reference.
-2. **Cryptography Explained:**
-   - **SHA-256 Hashing Lab:** Real-time hashing via WebCrypto API. Click **Flip Single Character** to witness the **Avalanche Effect** with character-by-character red diff highlighting!
-   - **Ed25519 Signatures:** Interactive verifier demonstrating mathematical verification with toggles for Valid Key, Rogue Attacker Key, and Tampered Metadata.
-   - **Integrity vs Authenticity:** Comprehensive comparison matrix explaining why both SHA-256 and Ed25519 are mandatory.
-3. **Complete Update Lifecycle Player:**
-   - Step-by-step interactive player walking through all 11 real pipeline steps.
-   - Controls: **Play**, **Pause**, **Previous**, **Next**, **Restart**, and **Speed (0.5x, 1.0x, 2.0x)**.
-   - Highlights the active step on a timeline track with detailed operational explanation.
-4. **Attack Simulations Lab:**
-   - Cards for all 6 scenarios featuring threat explanations and visual defense highlights.
-   - Each card includes an interactive **Execute Real Attack** button that executes the actual backend simulation endpoint (`/api/client/run-scenario/<id>`) and streams real-time console output into an embedded terminal.
-5. **Trust & Key Management:**
-   - Breakdown of Publisher Private Key, Client Public Key, TLS Certificates, and why transport security (HTTPS) must be paired with end-to-end payload authenticity.
-6. **Security Limitations & Threat Model:**
-   - Honest, rigorous disclosure of prototype boundaries (key compromise, host OS root malware, local rollback state tampering, NTP spoofing, and freeze attacks).
+1. **Client Device Telemetry:**
+   - Displays currently installed version (`DemoApp v1.0.0`), sequence (`Seq: 1`), health status, and cryptographic anchors.
+2. **Sequential Multi-Version Update Demonstration:**
+   - **Step 1:** In Admin Dashboard, click **Publish** on DemoApp v1.1.0.
+   - **Step 2:** In Client Dashboard, click **Check for Updates**. The server identifies **DemoApp v1.1.0 (Sequence 2)** as an eligible candidate.
+   - **Step 3:** Click **Run Secure Update**. All 11 verification steps execute with green checkmarks, DemoApp is updated to 1.1.0, and all 11 green steps remain displayed.
+   - **Step 4:** Repeat the process: publish 1.2.0 -> client updates to 1.2.0; publish 1.3.0 -> client updates to 1.3.0; publish 1.4.0 -> client updates to 1.4.0.
+3. **11-Step Verification Pipeline Visualizer:**
+   - Reflects true execution states: **Pending** (not yet reached), **Running** (actively executing), **Passed** (verified successfully), **Failed** (security violation), and **Skipped** (halted due to earlier failure).
+   - Checking for updates preserves existing completed pipeline cards without wiping them back to pending.
+   - Double-clicks and duplicate submissions while an update is running are blocked.
+4. **Attack Simulation Suite (6 One-Click Scenarios):**
+   - Click any of the 6 scenario buttons (Successful Update, Package Tampering, Rogue Publisher, Rollback, Metadata Tampering, Expired Release).
+   - Intercepted attacks display the **Security Alert** card with What Happened, Why It Was Blocked, and the Security Guarantee Enforced.
+5. **Diagnostic Export:**
+   - Click **Export Report** to download an audit JSON manifest containing device state, cryptographic anchors, runtime checksums, and recent incident logs.
 
 ---
 
-## 5. UI Screenshots
+### Step 5.4: Interactive "How It Works" Architecture & Cryptography Page
+Open [`https://127.0.0.1:5000/how-it-works`](https://127.0.0.1:5000/how-it-works):
 
-High-resolution screenshots are located in `docs/screenshots/`:
-- `docs/screenshots/admin_dashboard.png`: Administrator Dashboard with clickable release rows, metrics, and security filters.
-- `docs/screenshots/client_dashboard.png`: Client Dashboard with version comparison, 11-step pipeline, failure explanations, and history.
-- `docs/screenshots/how_it_works.png`: Interactive How It Works page with SVG architecture, crypto animations, lifecycle player, and attack lab.
+- **Interactive Architecture SVG**: Clickable components detailing cryptographic responsibilities.
+- **SHA-256 Avalanche Lab**: Flip characters and watch 50%+ bit divergence live.
+- **Ed25519 Signatures Lab**: Toggle valid vs rogue keys and tampered metadata.
+- **Lifecycle Animation Player**: Step-by-step playback with speed controls.
+- **Attack Simulations Terminal**: Embedded real-time execution console.
+- **Security Limitations & Threat Model**: Transparent prototype boundaries.

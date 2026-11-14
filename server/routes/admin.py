@@ -81,8 +81,30 @@ def publish_release():
 @login_required
 def get_releases():
     software_id = request.args.get("software_id")
-    releases = ReleaseManager.list_releases(software_id)
-    return jsonify({"releases": releases}), 200
+    grouped = ReleaseManager.get_releases_grouped(software_id)
+    return jsonify({
+        "releases": grouped["all_releases"],
+        "published_releases": grouped["published_releases"],
+        "prepared_releases": grouped["prepared_releases"]
+    }), 200
+
+@admin_bp.route("/releases/<int:release_id>/publish", methods=["POST"])
+@login_required
+def publish_prepared_release(release_id: int):
+    try:
+        actor = session.get("user", "admin")
+        updated_release = ReleaseManager.publish_prepared_release(
+            release_id=release_id,
+            publisher_user=actor
+        )
+        return jsonify({
+            "message": f"Release v{updated_release['version']} (sequence {updated_release['release_sequence']}) published successfully",
+            "release": updated_release
+        }), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": f"Failed to publish release: {str(e)}"}), 500
 
 @admin_bp.route("/releases/<int:release_id>", methods=["GET"])
 @login_required
@@ -161,6 +183,8 @@ def get_stats():
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) as c FROM releases WHERE status = 'published'")
     pub_count = cursor.fetchone()["c"]
+    cursor.execute("SELECT COUNT(*) as c FROM releases WHERE status = 'prepared'")
+    prep_count = cursor.fetchone()["c"]
     cursor.execute("SELECT COUNT(*) as c FROM releases WHERE status = 'revoked'")
     rev_count = cursor.fetchone()["c"]
     cursor.execute("SELECT COUNT(*) as c FROM releases")
@@ -177,8 +201,12 @@ def get_stats():
     total_activity = cursor.fetchone()["c"]
     conn.close()
     
+    from server.database.database import get_active_presentation_session
+    active_sess = get_active_presentation_session()
+
     return jsonify({
         "published_releases": pub_count,
+        "prepared_releases": prep_count,
         "revoked_releases": rev_count,
         "total_releases": total_releases,
         "active_clients": client_count,
@@ -186,6 +214,34 @@ def get_stats():
         "blocked_attacks": blocked_count,
         "successful_installs": success_installs,
         "total_activities": total_activity,
+        "active_session": active_sess,
         "data_source": "live_sqlite_database"
+    }), 200
+
+@admin_bp.route("/presentation-session", methods=["GET"])
+@login_required
+def get_presentation_session():
+    from server.database.database import get_active_presentation_session
+    sess = get_active_presentation_session()
+    return jsonify({"session": sess}), 200
+
+@admin_bp.route("/new-session", methods=["POST"])
+@login_required
+def start_new_session_route():
+    from flask import current_app
+    if not current_app.config.get("DEMO_MODE", False):
+        return jsonify({"error": "Starting a new presentation session requires demonstration mode (DEMO_MODE)."}), 403
+
+    csrf_header = request.headers.get("X-CSRF-Token", "").strip()
+    expected_csrf = session.get("csrf_token", "")
+    if not csrf_header or csrf_header != expected_csrf:
+        return jsonify({"error": "Invalid or missing CSRF token"}), 403
+
+    from server.database.database import start_new_presentation_session
+    actor = session.get("user", "admin")
+    sess = start_new_presentation_session(actor=actor, notes="Triggered from Admin Dashboard UI")
+    return jsonify({
+        "message": f"New presentation session {sess['session_id']} started successfully. Canonical baseline restored.",
+        "session": sess
     }), 200
 

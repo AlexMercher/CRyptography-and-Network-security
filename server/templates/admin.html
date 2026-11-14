@@ -41,12 +41,19 @@
 
 <!-- Admin Session Card -->
 <div class="card" style="margin-bottom: 1.5rem;">
-  <div style="display: flex; justify-content: space-between; align-items: center;">
-    <div>
-      <span style="font-weight: 700; font-size: 1rem;"><i class="fa-solid fa-user-shield"></i> Publisher Session:</span>
-      <span id="session-user-badge" class="badge badge-warning" style="margin-left: 0.5rem;">Not Authenticated</span>
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+    <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+      <div>
+        <span style="font-weight: 700; font-size: 1rem;"><i class="fa-solid fa-user-shield"></i> Publisher Session:</span>
+        <span id="session-user-badge" class="badge badge-warning" style="margin-left: 0.5rem;">Not Authenticated</span>
+      </div>
+      <div style="border-left: 1px solid var(--border-color); padding-left: 1rem;">
+        <span style="font-weight: 700; font-size: 0.9rem;"><i class="fa-solid fa-chalkboard-user"></i> Presentation Session:</span>
+        <span id="active-session-badge" class="badge badge-info" style="margin-left: 0.5rem; font-family: monospace;">Loading...</span>
+      </div>
     </div>
-    <div id="auth-action-container">
+    <div id="auth-action-container" style="display: flex; gap: 0.5rem; align-items: center;">
+      <button class="btn btn-warning" onclick="promptNewPresentationSession()"><i class="fa-solid fa-arrows-rotate"></i> Start New Presentation Session</button>
       <button class="btn btn-secondary" onclick="openLoginModal()"><i class="fa-solid fa-right-to-bracket"></i> Login as Admin</button>
     </div>
   </div>
@@ -132,6 +139,12 @@
       <button class="btn btn-secondary" onclick="quickPublish('1.2.0', 3, 'Zero-trust architecture & threat telemetry')">
         <i class="fa-solid fa-shield-virus"></i> Publish DemoApp v1.2.0 (Sequence 3)
       </button>
+      <button class="btn btn-secondary" onclick="quickPublish('1.3.0', 4, 'Advanced analytics: Fibonacci & Miller-Rabin')">
+        <i class="fa-solid fa-chart-line"></i> Publish DemoApp v1.3.0 (Sequence 4)
+      </button>
+      <button class="btn btn-secondary" onclick="quickPublish('1.4.0', 5, 'Security toolkit: entropy calculator & NIST suite')">
+        <i class="fa-solid fa-shield-halved"></i> Publish DemoApp v1.4.0 (Sequence 5)
+      </button>
     </div>
 
     <div style="background: #0b111e; border: 1px solid var(--border-color); border-radius: 6px; padding: 1rem;">
@@ -140,6 +153,36 @@
         The update server generates a SHA-256 package digest and attaches canonical metadata signed by the publisher's Ed25519 private key. Even if an adversary intercepts or tampers with the package or database, the client independently verifies the cryptographic signature before executing any update.
       </p>
     </div>
+  </div>
+</div>
+
+<!-- Prepared Releases (Awaiting Publication) Table -->
+<div class="card" style="margin-bottom: 2rem; border-left: 4px solid var(--primary-glow);">
+  <div class="card-header">
+    <div>
+      <h2 class="card-title" style="color: var(--primary-glow);"><i class="fa-solid fa-clock"></i> Prepared Releases (Awaiting Publication)</h2>
+      <span style="font-size: 0.75rem; color: var(--text-muted);">Packages prepared and cryptographically signed on server, awaiting administrative publication to client update channel.</span>
+    </div>
+    <span class="badge badge-warning" id="prepared-count-badge">0 Prepared</span>
+  </div>
+  <div class="table-responsive">
+    <table id="prepared-releases-table">
+      <thead>
+        <tr>
+          <th>Software</th>
+          <th>Version</th>
+          <th>Seq</th>
+          <th>Package File</th>
+          <th>SHA-256 Digest</th>
+          <th>Description</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td colspan="8" style="text-align: center; color: var(--text-muted);">Loading prepared releases...</td></tr>
+      </tbody>
+    </table>
   </div>
 </div>
 

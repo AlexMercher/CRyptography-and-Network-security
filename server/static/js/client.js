@@ -1,5 +1,6 @@
 let latestCheckData = null;
 let currentClientState = null;
+let isUpdating = false;
 
 async function loadClientState() {
   try {
@@ -17,12 +18,17 @@ async function loadClientState() {
 
     logConsole(`Current local installed version: DemoApp v${state.installed_version} (Seq: ${state.release_sequence})`, "info");
     loadClientHistory();
+    loadReleaseCatalog();
   } catch (err) {
     console.error("Client state load error:", err);
   }
 }
 
 async function resetClientBaseline() {
+  if (isUpdating) {
+    logConsole("Cannot reset baseline while an update is actively in progress.", "warn");
+    return;
+  }
   try {
     const csrfMeta = document.querySelector('meta[name="csrf-token"]');
     const headers = { "Content-Type": "application/json" };
@@ -37,9 +43,9 @@ async function resetClientBaseline() {
     if (res.ok) {
       logConsole(data.message, "success");
       hideFailureExplanation();
-      loadClientState();
       resetPipelineUI();
-      checkUpdates();
+      await loadClientState();
+      await refreshUpdateAvailability();
     } else {
       logConsole(`Reset rejected: ${data.error || "Administrator authentication required."} (HTTP ${res.status})`, "error");
     }
@@ -48,11 +54,7 @@ async function resetClientBaseline() {
   }
 }
 
-async function checkUpdates() {
-  resetPipelineUI();
-  hideFailureExplanation();
-  logConsole("Querying update server for available releases...", "info");
-
+async function refreshUpdateAvailability() {
   try {
     const stateRes = await fetch("/api/client/status");
     const state = await stateRes.json();
@@ -91,8 +93,18 @@ async function checkUpdates() {
       logConsole(data.message || "System is already running the latest version.", "warn");
     }
   } catch (err) {
-    logConsole("Update check failed: " + err, "error");
+    logConsole("Update availability check failed: " + err, "error");
   }
+}
+
+async function checkUpdates() {
+  if (isUpdating) {
+    logConsole("Update check postponed: an installation pipeline is currently active.", "warn");
+    return;
+  }
+  hideFailureExplanation();
+  logConsole("Querying update server for available releases...", "info");
+  await refreshUpdateAvailability();
 }
 
 function updateVersionComparison(installedState, availMeta) {
@@ -159,14 +171,25 @@ function resetPipelineUI() {
   mainBadge.innerText = "Standby";
 }
 
-function updatePipelineStep(stepNum, success, message) {
+function updatePipelineStep(stepNum, statusOrSuccess, message) {
   const el = document.getElementById(`step-${stepNum}`);
   if (!el) return;
 
   const tag = el.querySelector(".status-tag");
   const tech = document.getElementById(`step-tech-${stepNum}`);
 
-  if (success) {
+  let status = "PENDING";
+  if (statusOrSuccess === true || statusOrSuccess === "PASSED") {
+    status = "PASSED";
+  } else if (statusOrSuccess === "RUNNING") {
+    status = "RUNNING";
+  } else if (statusOrSuccess === "SKIPPED") {
+    status = "SKIPPED";
+  } else if (statusOrSuccess === false || statusOrSuccess === "FAILED") {
+    status = "FAILED";
+  }
+
+  if (status === "PASSED") {
     el.className = "step-card success";
     if (tag) {
       tag.className = "badge badge-success status-tag";
@@ -177,7 +200,27 @@ function updatePipelineStep(stepNum, success, message) {
       tech.innerHTML = `<i class="fa-solid fa-circle-check" style="color: var(--success);"></i> ${message}`;
     }
     logConsole(`[Step ${stepNum}] PASSED: ${message}`, "success");
-  } else {
+  } else if (status === "RUNNING") {
+    el.className = "step-card running";
+    if (tag) {
+      tag.className = "badge badge-warning status-tag";
+      tag.innerText = "RUNNING";
+    }
+    if (tech) {
+      tech.style.display = "block";
+      tech.innerHTML = `<i class="fa-solid fa-gear fa-spin" style="color: var(--warning);"></i> ${message || "Executing verification step..."}`;
+    }
+  } else if (status === "SKIPPED") {
+    el.className = "step-card skipped";
+    if (tag) {
+      tag.className = "badge badge-secondary status-tag";
+      tag.innerText = "SKIPPED";
+    }
+    if (tech) {
+      tech.style.display = "block";
+      tech.innerHTML = `<i class="fa-solid fa-forward-step" style="color: var(--text-muted);"></i> ${message}`;
+    }
+  } else if (status === "FAILED") {
     el.className = "step-card failure";
     if (tag) {
       tag.className = "badge badge-danger status-tag";
@@ -256,25 +299,45 @@ function hideFailureExplanation() {
 }
 
 async function executeStandardUpdate() {
+  if (isUpdating) {
+    logConsole("An update pipeline execution is already in progress. Please wait...", "warn");
+    return;
+  }
+  isUpdating = true;
+  const btnInstall = document.getElementById("btn-install-pipeline");
+  if (btnInstall) btnInstall.setAttribute("disabled", "true");
+
   hideFailureExplanation();
   resetPipelineUI();
+  updatePipelineStep(1, "RUNNING", "Querying server and retrieving signed metadata...");
   logConsole("Starting mandatory 11-step update pipeline...", "info");
   const mainBadge = document.getElementById("pipeline-status-badge");
   mainBadge.className = "badge badge-warning";
-  mainBadge.innerText = "Verifying...";
+  mainBadge.innerText = "Verifying Pipeline...";
 
   try {
     const res = await fetch("/api/client/run-update", { method: "POST" });
     const result = await res.json();
-    processPipelineResult(result);
+    await processPipelineResult(result);
   } catch (err) {
     logConsole("Pipeline execution error: " + err, "error");
+  } finally {
+    isUpdating = false;
   }
 }
 
 async function runAttackScenario(scenarioNum) {
+  if (isUpdating) {
+    logConsole("A pipeline execution is already in progress. Please wait...", "warn");
+    return;
+  }
+  isUpdating = true;
+  const btnInstall = document.getElementById("btn-install-pipeline");
+  if (btnInstall) btnInstall.setAttribute("disabled", "true");
+
   resetPipelineUI();
   hideFailureExplanation();
+  updatePipelineStep(1, "RUNNING", "Initializing simulation payload...");
   logConsole(`========== TRIGGERING DEMO SCENARIO ${scenarioNum} ==========`, "warn");
   const mainBadge = document.getElementById("pipeline-status-badge");
   mainBadge.className = "badge badge-warning";
@@ -286,34 +349,37 @@ async function runAttackScenario(scenarioNum) {
 
     logConsole(`Scenario: ${data.title}`, "info");
     logConsole(`Expected: ${data.expected}`, "info");
-    processPipelineResult(data.result);
+    await processPipelineResult(data.result);
   } catch (err) {
     logConsole("Scenario error: " + err, "error");
+  } finally {
+    isUpdating = false;
   }
 }
 
-function processPipelineResult(result) {
+async function processPipelineResult(result) {
   const mainBadge = document.getElementById("pipeline-status-badge");
 
   if (result.steps && result.steps.length > 0) {
     result.steps.forEach(s => {
-      updatePipelineStep(s.step, s.success, s.message);
+      updatePipelineStep(s.step, s.status || (s.success ? "PASSED" : "FAILED"), s.message);
     });
   }
 
   if (result.success) {
     mainBadge.className = "badge badge-success";
-    mainBadge.innerText = "Update Complete (11/11 Passed)";
+    mainBadge.innerHTML = `<i class="fa-solid fa-circle-check"></i> Update Complete (11/11 Passed)`;
     logConsole(`SUCCESS: ${result.message}`, "success");
     hideFailureExplanation();
-    loadClientState();
-    checkUpdates();
+    await loadClientState();
+    await refreshUpdateAvailability();
   } else {
     mainBadge.className = "badge badge-danger";
-    mainBadge.innerText = `Blocked at Step ${result.error_stage}`;
+    mainBadge.innerHTML = `<i class="fa-solid fa-ban"></i> Blocked at Step ${result.error_stage}`;
     logConsole(`UPDATE ABORTED: Security verification failed at step ${result.error_stage}: ${result.message}`, "error");
     showFailureExplanation(result.error_stage, result.message);
-    loadClientHistory();
+    await loadClientHistory();
+    await refreshUpdateAvailability();
   }
 }
 
@@ -395,6 +461,57 @@ function logConsole(msg, type = "info") {
 
 function clearConsole() {
   document.getElementById("client-console").innerHTML = `<div class="terminal-line info">[CLIENT] Console cleared.</div>`;
+}
+
+async function loadReleaseCatalog() {
+  try {
+    const res = await fetch("/api/updates/catalog?software_id=demoapp");
+    if (!res.ok) return;
+    const data = await res.json();
+    const tbody = document.querySelector("#client-catalog-table tbody");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+
+    if (!data.catalog || data.catalog.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted);">No software releases published yet.</td></tr>`;
+      return;
+    }
+
+    const installedSeq = currentClientState ? currentClientState.release_sequence : 1;
+    const installedVer = currentClientState ? currentClientState.installed_version : "1.0.0";
+
+    data.catalog.forEach(r => {
+      const tr = document.createElement("tr");
+      const shortHash = r.package_hash ? r.package_hash.substring(0, 12) + "..." : "N/A";
+      const statusBadge = r.status === "published"
+        ? `<span class="badge badge-success"><i class="fa-solid fa-check"></i> Published</span>`
+        : `<span class="badge badge-danger"><i class="fa-solid fa-ban"></i> Revoked</span>`;
+
+      let eligBadge = "";
+      if (r.version === installedVer) {
+        eligBadge = `<span class="badge badge-info"><i class="fa-solid fa-circle-check"></i> Currently Installed</span>`;
+      } else if (r.status === "revoked") {
+        eligBadge = `<span class="badge badge-danger"><i class="fa-solid fa-circle-xmark"></i> Ineligible (Revoked)</span>`;
+      } else if (r.release_sequence > installedSeq) {
+        eligBadge = `<span class="badge badge-success"><i class="fa-solid fa-arrow-up"></i> Eligible Upgrade</span>`;
+      } else {
+        eligBadge = `<span class="badge badge-warning"><i class="fa-solid fa-ban"></i> Ineligible (Rollback)</span>`;
+      }
+
+      tr.innerHTML = `
+        <td><strong>${r.software_id}</strong></td>
+        <td><code>v${r.version}</code></td>
+        <td><span class="badge badge-info">Seq: ${r.release_sequence}</span></td>
+        <td>${r.package_filename} (${r.package_size} B)</td>
+        <td><code title="${r.package_hash}">${shortHash}</code></td>
+        <td>${statusBadge}</td>
+        <td>${eligBadge}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  } catch (err) {
+    console.error("Catalog load error:", err);
+  }
 }
 
 document.addEventListener("DOMContentLoaded", () => {

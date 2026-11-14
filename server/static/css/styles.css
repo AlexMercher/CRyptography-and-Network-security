@@ -376,6 +376,24 @@ code {
   opacity: 0.6;
 }
 
+.step-card.running {
+  border-left: 4px solid var(--warning);
+  background-color: rgba(245, 158, 11, 0.08);
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.2);
+  opacity: 1;
+}
+
+.step-card.skipped {
+  border-left: 4px solid #64748b;
+  background-color: rgba(100, 116, 139, 0.05);
+  opacity: 0.45;
+}
+
+.badge-secondary {
+  background-color: #475569;
+  color: #cbd5e1;
+}
+
 .step-info {
   display: flex;
   align-items: center;

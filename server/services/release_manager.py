@@ -7,7 +7,8 @@ from server.database.database import get_db_connection, log_security_event, log_
 from server.services.signing_service import create_and_sign_release_metadata
 from common.crypto_engine import compare_versions
 
-RELEASES_STORAGE = Path(__file__).resolve().parent.parent.parent / "storage" / "releases"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+RELEASES_STORAGE = PROJECT_ROOT / "storage" / "releases"
 
 class ReleaseManager:
     @staticmethod
@@ -100,17 +101,16 @@ class ReleaseManager:
         }
 
     @staticmethod
-    def get_latest_release(software_id: str, db_file = None) -> Optional[Dict[str, Any]]:
+    def get_latest_release(software_id: str, db_file = None, min_sequence: Optional[int] = None) -> Optional[Dict[str, Any]]:
         conn = get_db_connection(db_file)
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT * FROM releases
-            WHERE software_id = ? AND status = 'published'
-            ORDER BY release_sequence DESC LIMIT 1
-            """,
-            (software_id,)
-        )
+        query = "SELECT * FROM releases WHERE software_id = ? AND status = 'published'"
+        params = [software_id]
+        if min_sequence is not None:
+            query += " AND release_sequence > ?"
+            params.append(min_sequence)
+        query += " ORDER BY release_sequence DESC LIMIT 1"
+        cursor.execute(query, params)
         row = cursor.fetchone()
         conn.close()
         if not row:
@@ -171,7 +171,7 @@ class ReleaseManager:
                 (software_id,)
             )
         else:
-            cursor.execute("SELECT * FROM releases ORDER BY id DESC")
+            cursor.execute("SELECT * FROM releases ORDER BY release_sequence DESC")
         rows = cursor.fetchall()
         conn.close()
         results = []
@@ -196,6 +196,125 @@ class ReleaseManager:
         return results
 
     @staticmethod
+    def get_releases_grouped(software_id: Optional[str] = None, db_file = None) -> Dict[str, Any]:
+        all_releases = ReleaseManager.list_releases(software_id, db_file=db_file)
+        published = [r for r in all_releases if r["status"] in ("published", "revoked")]
+        # published releases are already sorted release_sequence DESC
+        prepared = [r for r in all_releases if r["status"] == "prepared"]
+        # prepared releases sorted release_sequence ASC so lowest prepared (next to publish) is first
+        prepared.sort(key=lambda x: x["release_sequence"])
+        return {
+            "all_releases": all_releases,
+            "published_releases": published,
+            "prepared_releases": prepared
+        }
+
+    @staticmethod
+    def publish_prepared_release(release_id: int, publisher_user: str = "admin", db_file = None) -> Dict[str, Any]:
+        """
+        Transitions a prepared release to 'published' status:
+        1. Validates that the release exists and is currently in 'prepared' status.
+        2. Validates sequence ordering:
+           - No earlier sequence number for this software remains in 'prepared' status.
+           - Release sequence is strictly greater than current maximum published sequence.
+        3. Validates package file existence and cryptographic integrity:
+           - Package file exists in storage/packages.
+           - File size and computed SHA-256 match the signed metadata.
+           - Ed25519 signature is valid against the publisher public key.
+        4. Updates status to 'published' and published_at to current UTC timestamp.
+        5. Logs security audit event.
+        """
+        from common.crypto_engine import compute_sha256, verify_metadata
+
+        conn = get_db_connection(db_file)
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM releases WHERE id = ?", (release_id,))
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            raise ValueError(f"Release ID {release_id} not found.")
+
+        current_status = row["status"]
+        if current_status != "prepared":
+            conn.close()
+            raise ValueError(f"Release ID {release_id} (v{row['version']}) is not in 'prepared' status (current status: '{current_status}').")
+
+        software_id = row["software_id"]
+        target_seq = row["release_sequence"]
+        ver = row["version"]
+
+        # Ensure no lower sequence number is still prepared (strict sequential publication)
+        cursor.execute(
+            "SELECT id, version, release_sequence FROM releases WHERE software_id = ? AND status = 'prepared' AND release_sequence < ? ORDER BY release_sequence ASC LIMIT 1",
+            (software_id, target_seq)
+        )
+        earlier_prepared = cursor.fetchone()
+        if earlier_prepared:
+            conn.close()
+            raise ValueError(
+                f"Cannot publish v{ver} (sequence {target_seq}): Earlier version v{earlier_prepared['version']} (sequence {earlier_prepared['release_sequence']}) must be published first."
+            )
+
+        # Ensure target sequence is strictly greater than current maximum published sequence
+        cursor.execute(
+            "SELECT MAX(release_sequence) as max_seq FROM releases WHERE software_id = ? AND status = 'published'",
+            (software_id,)
+        )
+        max_row = cursor.fetchone()
+        max_pub_seq = max_row["max_seq"] if max_row and max_row["max_seq"] is not None else 0
+        if target_seq <= max_pub_seq:
+            conn.close()
+            raise ValueError(
+                f"Release sequence ({target_seq}) must be strictly greater than current maximum published sequence ({max_pub_seq})."
+            )
+
+        # Validate package on disk
+        packages_dir = PROJECT_ROOT / "storage" / "packages"
+        pkg_path = packages_dir / row["package_filename"]
+        if not pkg_path.exists():
+            conn.close()
+            raise FileNotFoundError(f"Package archive {row['package_filename']} not found on server storage.")
+
+        if pkg_path.stat().st_size != row["package_size"]:
+            conn.close()
+            raise ValueError(f"Package size mismatch on disk: expected {row['package_size']}, found {pkg_path.stat().st_size}")
+
+        actual_hash = compute_sha256(pkg_path)
+        if actual_hash.lower() != row["package_hash"].lower():
+            conn.close()
+            raise ValueError(f"Package hash mismatch on disk: computed {actual_hash}, expected {row['package_hash']}")
+
+        # Validate Ed25519 signature
+        pub_key_path = PROJECT_ROOT / "keys" / "publisher_public.pem"
+        meta_dict = json.loads(row["signed_metadata_json"])
+        if not verify_metadata(pub_key_path, meta_dict, row["signature"]):
+            conn.close()
+            raise ValueError("Cryptographic verification failed: Ed25519 signature is invalid!")
+
+        # Transition status to published
+        now_iso = datetime.now(timezone.utc).isoformat()
+        cursor.execute(
+            """
+            UPDATE releases
+            SET status = 'published', published_at = ?, revocation_reason = NULL, revoked_at = NULL
+            WHERE id = ?
+            """,
+            (now_iso, release_id)
+        )
+        conn.commit()
+        conn.close()
+
+        log_security_event(
+            "RELEASE_PUBLISHED",
+            f"Prepared release v{ver} (sequence {target_seq}) published successfully by {publisher_user}",
+            result="ALLOWED",
+            related_user=publisher_user,
+            db_file=db_file
+        )
+
+        return ReleaseManager.get_release_by_id(release_id, db_file=db_file)
+
+    @staticmethod
     def revoke_release(release_id: int, reason: str = "Administrative revocation", db_file = None) -> bool:
         now_iso = datetime.now(timezone.utc).isoformat()
         conn = get_db_connection(db_file)
@@ -209,5 +328,20 @@ class ReleaseManager:
         conn.close()
         if success:
             log_security_event("RELEASE_REVOKED", f"Release ID {release_id} was revoked: {reason}", "ALERT", db_file=db_file)
+        return success
+
+    @staticmethod
+    def unrevoke_release(release_id: int, db_file = None) -> bool:
+        conn = get_db_connection(db_file)
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE releases SET status = 'published', revocation_reason = NULL, revoked_at = NULL WHERE id = ?",
+            (release_id,)
+        )
+        success = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+        if success:
+            log_security_event("RELEASE_RESTORED", f"Release ID {release_id} was un-revoked to active published status", "ALLOWED", db_file=db_file)
         return success
 
